@@ -1,0 +1,5 @@
+[package]
+
+name = "ijson_rust"
+version = "0.0.1"
+authors = ["Ivan Sagalaev <maniac@softwaremaniacs.org>"]

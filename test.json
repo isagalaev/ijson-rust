@@ -1,0 +1,23 @@
+{
+  "docs": [
+    {
+      "null": null,
+      "boolean": false,
+      "true": true,
+      "integer": 0,
+      "double": 0.5,
+      "exponent": 1.0e+2,
+      "long": 10000000000,
+      "string": "\u0441\u0442\u0440\u043e\u043a\u0430 - строка"
+    },
+    {
+      "meta": [[1], {}]
+    },
+    {
+      "meta": {"key": "value"}
+    },
+    {
+      "meta": null
+    }
+  ]
+}
