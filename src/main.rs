@@ -1,6 +1,3 @@
-#![feature(io)]
-#![feature(core)]
-
 extern crate ijson_rust;
 
 use std::fs::File;
