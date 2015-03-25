@@ -1,4 +1,5 @@
 #![feature(io)]
+#![feature(core)]
 
 extern crate ijson_rust;
 
@@ -66,7 +67,7 @@ impl<T: Read> Iterator for Lexer<T> {
                     escaped = !escaped && self.buf[self.pos] == b'\\';
                     self.pos += 1;
                 }
-                result.extend(self.buf[start..self.pos].iter().map(|&c| c));
+                result.extend(self.buf[start..self.pos].iter().cloned());
                 if self.pos < self.len {
                     self.pos += 1;
                     break;
@@ -84,7 +85,7 @@ impl<T: Read> Iterator for Lexer<T> {
                 while self.pos < self.len && is_lexeme(self.buf[self.pos]) {
                     self.pos += 1;
                 }
-                result.extend(self.buf[start..self.pos].iter().map(|&c| c));
+                result.extend(self.buf[start..self.pos].iter().cloned());
                 if self.pos < self.len || !self.ensure_buffer() {
                     break;
                 }
