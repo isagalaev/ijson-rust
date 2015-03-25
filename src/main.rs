@@ -21,14 +21,14 @@ fn is_lexeme(value: u8) -> bool {
     }
 }
 
-struct Lexer<T: Read> {
+struct Lexer {
     buf: [u8; BUFSIZE],
     len: usize,
     pos: usize,
-    f: T,
+    f: Box<Read>,
 }
 
-impl<T: Read> Lexer<T> {
+impl Lexer {
     fn ensure_buffer(&mut self) -> bool {
         if self.pos < self.len {
             true
@@ -42,7 +42,7 @@ impl<T: Read> Lexer<T> {
     }
 }
 
-impl<T: Read> Iterator for Lexer<T> {
+impl Iterator for Lexer {
     type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Vec<u8>> {
@@ -92,20 +92,20 @@ impl<T: Read> Iterator for Lexer<T> {
     }
 }
 
-fn lexer(filename: &str) -> Lexer<File> {
+fn lexer(filename: &str) -> Lexer {
     Lexer {
         buf: [0; BUFSIZE],
         len: 0,
         pos: 0,
         f: match File::open(filename) {
             Err(error) => panic!("Can't open {}: {}", filename, error),
-            Ok(result) => result,
+            Ok(result) => Box::new(result),
         },
     }
 }
 
 fn main() {
     for chunk in lexer("test.json") {
-       println!("{}", str::from_utf8(&chunk).unwrap());
+        println!("{}", str::from_utf8(&chunk).unwrap());
     }
 }
