@@ -144,15 +144,17 @@ impl Iterator for Parser {
 
     fn next(&mut self) -> Option<Event> {
         loop {
-            let mut lexeme = self.next_lexeme();
+            let lexeme = self.next_lexeme();
             match self.state {
                 State::End => {
                     return None;
                 }
                 State::Event(skip_comma) => {
-                    if skip_comma && lexeme == b"," {
-                        lexeme = self.next_lexeme();
-                    }
+                    let lexeme = if skip_comma && lexeme == b"," {
+                        self.next_lexeme()
+                    } else {
+                        lexeme
+                    };
                     let result = if lexeme == b"null" {
                         Event::Null
                     } else if lexeme == b"true" {
