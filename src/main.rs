@@ -122,13 +122,13 @@ enum State {
     Event(bool), // bool flags skippable commas
     Key,
     Colon,
-    End,
 }
 
 struct Parser {
     lexer: Lexer, // TODO: iterator of Vec<u8>
     stack: Vec<u8>,
     state: State,
+    closed: bool,
 }
 
 impl Parser {
@@ -137,18 +137,26 @@ impl Parser {
         self.lexer.next().expect("More lexemes expected")
     }
 
+    fn close(&mut self) {
+        self.closed = true;
+        match self.lexer.next() {
+            None => (),
+            Some(_) => panic!("Additional data"),
+        };
+    }
+
 }
 
 impl Iterator for Parser {
     type Item = Event;
 
     fn next(&mut self) -> Option<Event> {
+        if self.closed {
+            return None;
+        }
         loop {
             let lexeme = self.next_lexeme();
             match self.state {
-                State::End => {
-                    return None;
-                }
                 State::Event(skip_comma) => {
                     let lexeme = if skip_comma && lexeme == b"," {
                         self.next_lexeme()
@@ -184,10 +192,10 @@ impl Iterator for Parser {
                     } else {
                         Event::Number(0) // TODO: convert number
                     };
-                    self.state = if self.stack.len() == 0 {
-                        State::End
+                    if self.stack.len() == 0 {
+                        self.close();
                     } else {
-                        State::Event(true)
+                        self.state = State::Event(true);
                     };
                     return Some(result);
                 }
@@ -214,6 +222,7 @@ fn basic_parse(filename: &str) -> Parser {
         lexer: lexer(filename),
         stack: vec![],
         state: State::Event(false),
+        closed: false,
     }
 }
 
