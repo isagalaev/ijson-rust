@@ -1,3 +1,4 @@
+#![feature(convert)]
 extern crate ijson_rust;
 
 use std::fs::File;
@@ -104,8 +105,118 @@ fn lexer(filename: &str) -> Lexer {
     }
 }
 
+#[derive(Debug)]
+enum Event {
+    Null,
+    Boolean(bool),
+    String(String),
+    Key(String),
+    Number(i64),
+    StartArray,
+    EndArray,
+    StartMap,
+    EndMap,
+}
+
+enum State {
+    Event(bool), // bool flags skippable commas
+    Key,
+    Colon,
+    End,
+}
+
+struct Parser {
+    lexer: Lexer, // TODO: iterator of Vec<u8>
+    stack: Vec<u8>,
+    state: State,
+}
+
+impl Parser {
+
+    fn next_lexeme(&mut self) -> Vec<u8> {
+        self.lexer.next().expect("More lexemes expected")
+    }
+
+}
+
+impl Iterator for Parser {
+    type Item = Event;
+
+    fn next(&mut self) -> Option<Event> {
+        loop {
+            let mut lexeme = self.next_lexeme();
+            match self.state {
+                State::End => {
+                    return None;
+                }
+                State::Event(skip_comma) => {
+                    if skip_comma && lexeme == b"," {
+                        lexeme = self.next_lexeme();
+                    }
+                    let result = if lexeme == b"null" {
+                        Event::Null
+                    } else if lexeme == b"true" {
+                        Event::Boolean(true)
+                    } else if lexeme == b"false" {
+                        Event::Boolean(false)
+                    } else if lexeme == b"[" {
+                        self.stack.push(b'[');
+                        self.state = State::Event(false);
+                        Event::StartArray
+                    } else if lexeme == b"]" {
+                        if self.stack.len() == 0 || self.stack.pop().unwrap() != b'[' {
+                            panic!("Unmatched ]");
+                        }
+                        Event::EndArray
+                    } else if lexeme == b"{" {
+                        self.stack.push(b'{');
+                        self.state = State::Key;
+                        Event::StartMap
+                    } else if lexeme == b"}" {
+                        if self.stack.len() == 0 || self.stack.pop().unwrap() != b'{' {
+                            panic!("Unmatched }");
+                        }
+                        Event::EndMap
+                    } else if lexeme[0] == b'"' {
+                        Event::String(str::from_utf8(lexeme.as_slice()).ok().unwrap().to_string())
+                    } else {
+                        Event::Number(0) // TODO: convert number
+                    };
+                    self.state = if self.stack.len() == 0 {
+                        State::End
+                    } else {
+                        State::Event(true)
+                    };
+                    return Some(result);
+                }
+                State::Key => {
+                    if lexeme[0] != b'"' {
+                        panic!("Unexpected lexeme");
+                    }
+                    self.state = State::Colon;
+                    return Some(Event::Key(str::from_utf8(lexeme.as_slice()).ok().unwrap().to_string()));
+                }
+                State::Colon => {
+                    if lexeme != b":" {
+                        panic!("Unexpected lexeme");
+                    }
+                    self.state = State::Event(false);
+                }
+            };
+        }
+    }
+}
+
+fn basic_parse(filename: &str) -> Parser {
+    Parser {
+        lexer: lexer(filename),
+        stack: vec![],
+        state: State::Event(false),
+    }
+}
+
 fn main() {
-    for chunk in lexer("test.json") {
-        println!("{}", str::from_utf8(&chunk).unwrap());
+    for event in basic_parse("test.json") {
+        println!("{:?}", event);
     }
 }
