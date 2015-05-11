@@ -188,7 +188,7 @@ impl Iterator for Parser {
                         }
                         Event::EndMap
                     } else if lexeme[0] == b'"' {
-                        Event::String(str::from_utf8(lexeme.as_slice()).ok().unwrap().to_string())
+                        Event::String(str::from_utf8(lexeme.as_slice()).unwrap().to_string())
                     } else {
                         Event::Number(0) // TODO: convert number
                     };
