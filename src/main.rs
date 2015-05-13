@@ -192,32 +192,31 @@ impl Iterator for Parser {
     fn next(&mut self) -> Option<Event> {
         loop {
             let lexeme = self.next_lexeme();
-            println!("==== matching {:?}", self.state);
             match self.state {
                 State::Closed => {
                     return None;
                 }
                 State::Event => {
                     let event = self.process_event(&lexeme);
-                    if self.stack.len() == 0 {
-                        self.state = State::Closed
+                    self.state = if self.stack.len() == 0 {
+                        State::Closed
                     } else if lexeme == b"[" {
-                        self.state = State::Event
+                        State::Event
                     } else if lexeme == b"{" {
-                        self.state = State::Key
+                        State::Key
                     } else {
-                        self.state = State::Comma
-                    }
+                        State::Comma
+                    };
                     return Some(event);
                 }
                 State::Key => {
                     if lexeme == b"}" {
                         let event = self.process_event(&lexeme);
-                        if self.stack.len() == 0 {
-                            self.state = State::Closed
+                        self.state = if self.stack.len() == 0 {
+                            State::Closed
                         } else {
-                            self.state = State::Comma
-                        }
+                            State::Comma
+                        };
                         return Some(event);
                     }
                     if lexeme[0] != b'"' {
@@ -235,17 +234,21 @@ impl Iterator for Parser {
                 State::Comma => {
                     if lexeme == b"]" || lexeme == b"}" {
                         let event = self.process_event(&lexeme);
-                        if self.stack.len() == 0 {
-                            self.state = State::Closed
+                        self.state = if self.stack.len() == 0 {
+                            State::Closed
                         } else {
-                            self.state = State::Comma
-                        }
+                            State::Comma
+                        };
                         return Some(event);
                     }
                     if lexeme != b"," {
                         panic!("Unexpected lexeme");
                     }
-                    self.state = if self.stack[self.stack.len() - 1] == b'[' { State::Event } else { State::Key }
+                    self.state = if self.stack[self.stack.len() - 1] == b'[' {
+                        State::Event
+                    } else {
+                        State::Key
+                    };
                 }
             }
         }
