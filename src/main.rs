@@ -184,6 +184,18 @@ impl Parser {
         }
     }
 
+    fn after_event(&self, lexeme: &Vec<u8>) -> State {
+        if self.stack.len() == 0 {
+            State::Closed
+        } else if lexeme == b"[" {
+            State::Event
+        } else if lexeme == b"{" {
+            State::Key
+        } else {
+            State::Comma
+        }
+    }
+
 }
 
 impl Iterator for Parser {
@@ -198,25 +210,13 @@ impl Iterator for Parser {
                 }
                 State::Event => {
                     let event = self.process_event(&lexeme);
-                    self.state = if self.stack.len() == 0 {
-                        State::Closed
-                    } else if lexeme == b"[" {
-                        State::Event
-                    } else if lexeme == b"{" {
-                        State::Key
-                    } else {
-                        State::Comma
-                    };
+                    self.state = self.after_event(&lexeme);
                     return Some(event);
                 }
                 State::Key => {
                     if lexeme == b"}" {
                         let event = self.process_event(&lexeme);
-                        self.state = if self.stack.len() == 0 {
-                            State::Closed
-                        } else {
-                            State::Comma
-                        };
+                        self.state = self.after_event(&lexeme);
                         return Some(event);
                     }
                     if lexeme[0] != b'"' {
@@ -234,11 +234,7 @@ impl Iterator for Parser {
                 State::Comma => {
                     if lexeme == b"]" || lexeme == b"}" {
                         let event = self.process_event(&lexeme);
-                        self.state = if self.stack.len() == 0 {
-                            State::Closed
-                        } else {
-                            State::Comma
-                        };
+                        self.state = self.after_event(&lexeme);
                         return Some(event);
                     }
                     if lexeme != b"," {
