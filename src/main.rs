@@ -150,7 +150,8 @@ impl Parser {
     }
 
     fn process_event(&mut self, lexeme: &Vec<u8>) -> Event {
-        if lexeme == b"null" {
+
+        let result = if lexeme == b"null" {
             Event::Null
         } else if lexeme == b"true" {
             Event::Boolean(true)
@@ -181,11 +182,9 @@ impl Parser {
                 Ok(result) => result,
             };
             Event::Number(number)
-        }
-    }
+        };
 
-    fn after_event(&self, lexeme: &Vec<u8>) -> State {
-        if self.stack.len() == 0 {
+        self.state = if self.stack.len() == 0 {
             State::Closed
         } else if lexeme == b"[" {
             State::Event
@@ -193,7 +192,9 @@ impl Parser {
             State::Key
         } else {
             State::Comma
-        }
+        };
+
+        result
     }
 
 }
@@ -209,15 +210,11 @@ impl Iterator for Parser {
                     return None;
                 }
                 State::Event => {
-                    let event = self.process_event(&lexeme);
-                    self.state = self.after_event(&lexeme);
-                    return Some(event);
+                    return Some(self.process_event(&lexeme));
                 }
                 State::Key => {
                     if lexeme == b"}" {
-                        let event = self.process_event(&lexeme);
-                        self.state = self.after_event(&lexeme);
-                        return Some(event);
+                        return Some(self.process_event(&lexeme));
                     }
                     if lexeme[0] != b'"' {
                         panic!("Unexpected lexeme");
@@ -233,9 +230,7 @@ impl Iterator for Parser {
                 }
                 State::Comma => {
                     if lexeme == b"]" || lexeme == b"}" {
-                        let event = self.process_event(&lexeme);
-                        self.state = self.after_event(&lexeme);
-                        return Some(event);
+                        return Some(self.process_event(&lexeme));
                     }
                     if lexeme != b"," {
                         panic!("Unexpected lexeme");
