@@ -1,4 +1,3 @@
-#![feature(convert)]
 extern crate ijson_rust;
 
 use std::fs::File;
@@ -140,7 +139,7 @@ impl Parser {
         self.lexer.next().expect("More lexemes expected")
     }
 
-    fn process_event(&mut self, lexeme: Vec<u8>) -> Event {
+    fn process_event(&mut self, lexeme: &[u8]) -> Event {
 
         let result = if lexeme == b"null" {
             Event::Null
@@ -149,7 +148,7 @@ impl Parser {
         } else if lexeme == b"false" {
             Event::Boolean(false)
         } else if lexeme[0] == b'"' {
-            Event::String(str::from_utf8(lexeme.as_slice()).unwrap().to_string())
+            Event::String(str::from_utf8(lexeme).unwrap().to_string())
         } else if lexeme == b"[" {
             self.stack.push(b'[');
             Event::StartArray
@@ -167,7 +166,7 @@ impl Parser {
             }
             Event::EndMap
         } else {
-            let s = str::from_utf8(lexeme.as_slice()).unwrap();
+            let s = str::from_utf8(lexeme).unwrap();
             let number = match f64::from_str(s) {
                 Err(_) => panic!("Unexpected lexeme {:?}", lexeme),
                 Ok(result) => result,
@@ -207,7 +206,7 @@ impl Iterator for Parser {
                     if (lexeme == b"]" || lexeme == b"}") && !can_close {
                         panic!("Unexpected lexeme")
                     }
-                    return Some(self.process_event(lexeme))
+                    return Some(self.process_event(&lexeme))
                 }
                 State::Key(can_close) => {
                     let lexeme = self.next_lexeme();
@@ -215,7 +214,7 @@ impl Iterator for Parser {
                         if !can_close {
                             panic!("Unexpected lexeme")
                         }
-                        Some(self.process_event(lexeme))
+                        Some(self.process_event(&lexeme))
                     } else if lexeme[0] != b'"' {
                         panic!("Unexpected lexeme")
                     } else {
@@ -232,7 +231,7 @@ impl Iterator for Parser {
                 State::Comma => {
                     let lexeme = self.next_lexeme();
                     if lexeme == b"]" || lexeme == b"}" {
-                        return Some(self.process_event(lexeme));
+                        return Some(self.process_event(&lexeme));
                     }
                     if lexeme != b"," {
                         panic!("Unexpected lexeme");
