@@ -92,15 +92,12 @@ impl Iterator for Lexer {
     }
 }
 
-fn lexer(filename: &str) -> Lexer {
+fn lexer(f: Box<Read>) -> Lexer {
     Lexer {
         buf: [0; BUFSIZE],
         len: 0,
         pos: 0,
-        f: match File::open(filename) {
-            Err(error) => panic!("Can't open {}: {}", filename, error),
-            Ok(result) => Box::new(result),
-        },
+        f: f,
     }
 }
 
@@ -245,16 +242,17 @@ impl Iterator for Parser {
     }
 }
 
-fn basic_parse(filename: &str) -> Parser {
+fn basic_parse(f: Box<Read>) -> Parser {
     Parser {
-        lexer: lexer(filename),
+        lexer: lexer(f),
         stack: vec![],
         state: State::Event(false),
     }
 }
 
 fn main() {
-    for event in basic_parse("test.json") {
+    let f = Box::new(File::open("test.json").unwrap());
+    for event in basic_parse(f) {
         println!("{:?}", event);
     }
 }
