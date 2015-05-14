@@ -3,7 +3,6 @@ extern crate ijson_rust;
 use std::fs::File;
 use std::io::Read;
 use std::str;
-use std::str::FromStr;
 
 const BUFSIZE: usize = 10;
 
@@ -167,11 +166,10 @@ impl Parser {
             Event::EndMap
         } else {
             let s = str::from_utf8(lexeme).unwrap();
-            let number = match f64::from_str(s) {
+            Event::Number(match s.parse() {
                 Err(_) => panic!("Unexpected lexeme {:?}", lexeme),
                 Ok(result) => result,
-            };
-            Event::Number(number)
+            })
         };
 
         self.state = if self.stack.len() == 0 {
