@@ -155,15 +155,15 @@ impl Parser {
             self.stack.push(b'{');
             Event::StartMap
         } else if lexeme == b"]" {
-            if self.stack.len() == 0 || self.stack.pop().unwrap() != b'[' {
-                panic!("Unmatched ]");
+            match self.stack.pop() {
+                Some(b'[') => Event::EndArray,
+                _ => panic!("Unmatched ]"),
             }
-            Event::EndArray
         } else if lexeme == b"}" {
-            if self.stack.len() == 0 || self.stack.pop().unwrap() != b'{' {
-                panic!("Unmatched }");
+            match self.stack.pop() {
+                Some(b'{') => Event::EndMap,
+                _ => panic!("Unmatched }"),
             }
-            Event::EndMap
         } else {
             let s = str::from_utf8(lexeme).unwrap();
             Event::Number(match s.parse() {
