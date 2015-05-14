@@ -137,19 +137,10 @@ struct Parser {
 impl Parser {
 
     fn next_lexeme(&mut self) -> Vec<u8> {
-        match self.lexer.next() {
-            Some(lexeme) => match self.state {
-                State::Closed => panic!("Additional data"),
-                _ => lexeme,
-            },
-            None => match self.state {
-                State::Closed => vec![],
-                _ => panic!("More lexemes expected"),
-            },
-        }
+        self.lexer.next().expect("More lexemes expected")
     }
 
-    fn process_event(&mut self, lexeme: &Vec<u8>) -> Event {
+    fn process_event(&mut self, lexeme: Vec<u8>) -> Event {
 
         let result = if lexeme == b"null" {
             Event::Null
@@ -204,33 +195,38 @@ impl Iterator for Parser {
 
     fn next(&mut self) -> Option<Event> {
         loop {
-            let lexeme = self.next_lexeme();
             match self.state {
                 State::Closed => {
-                    return None;
+                    match self.lexer.next() {
+                        Some(_) => panic!("Additional data"),
+                        None => return None,
+                    }
                 }
                 State::Event => {
-                    return Some(self.process_event(&lexeme));
+                    let lexeme = self.next_lexeme();
+                    return Some(self.process_event(lexeme))
                 }
                 State::Key => {
-                    if lexeme == b"}" {
-                        return Some(self.process_event(&lexeme));
+                    let lexeme = self.next_lexeme();
+                    return if lexeme == b"}" {
+                        Some(self.process_event(lexeme))
+                    } else if lexeme[0] != b'"' {
+                        panic!("Unexpected lexeme")
+                    } else {
+                        self.state = State::Colon;
+                        Some(Event::Key(str::from_utf8(&lexeme[..]).unwrap().to_string()))
                     }
-                    if lexeme[0] != b'"' {
-                        panic!("Unexpected lexeme");
-                    }
-                    self.state = State::Colon;
-                    return Some(Event::Key(str::from_utf8(lexeme.as_slice()).unwrap().to_string()));
                 }
                 State::Colon => {
-                    if lexeme != b":" {
-                        panic!("Unexpected lexeme");
+                    if self.next_lexeme() != b":" {
+                        panic!("Unexpected lexeme")
                     }
                     self.state = State::Event;
                 }
                 State::Comma => {
+                    let lexeme = self.next_lexeme();
                     if lexeme == b"]" || lexeme == b"}" {
-                        return Some(self.process_event(&lexeme));
+                        return Some(self.process_event(lexeme));
                     }
                     if lexeme != b"," {
                         panic!("Unexpected lexeme");
