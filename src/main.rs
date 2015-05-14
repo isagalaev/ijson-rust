@@ -122,8 +122,8 @@ enum Event {
 #[derive(Debug)]
 enum State {
     Closed,
-    Event,
-    Key,
+    Event(bool),
+    Key(bool),
     Colon,
     Comma,
 }
@@ -178,9 +178,9 @@ impl Parser {
         self.state = if self.stack.len() == 0 {
             State::Closed
         } else if lexeme == b"[" {
-            State::Event
+            State::Event(true)
         } else if lexeme == b"{" {
-            State::Key
+            State::Key(true)
         } else {
             State::Comma
         };
@@ -202,13 +202,19 @@ impl Iterator for Parser {
                         None => return None,
                     }
                 }
-                State::Event => {
+                State::Event(can_close) => {
                     let lexeme = self.next_lexeme();
+                    if (lexeme == b"]" || lexeme == b"}") && !can_close {
+                        panic!("Unexpected lexeme")
+                    }
                     return Some(self.process_event(lexeme))
                 }
-                State::Key => {
+                State::Key(can_close) => {
                     let lexeme = self.next_lexeme();
                     return if lexeme == b"}" {
+                        if !can_close {
+                            panic!("Unexpected lexeme")
+                        }
                         Some(self.process_event(lexeme))
                     } else if lexeme[0] != b'"' {
                         panic!("Unexpected lexeme")
@@ -221,7 +227,7 @@ impl Iterator for Parser {
                     if self.next_lexeme() != b":" {
                         panic!("Unexpected lexeme")
                     }
-                    self.state = State::Event;
+                    self.state = State::Event(false);
                 }
                 State::Comma => {
                     let lexeme = self.next_lexeme();
@@ -232,9 +238,9 @@ impl Iterator for Parser {
                         panic!("Unexpected lexeme");
                     }
                     self.state = if self.stack[self.stack.len() - 1] == b'[' {
-                        State::Event
+                        State::Event(false)
                     } else {
-                        State::Key
+                        State::Key(false)
                     };
                 }
             }
@@ -246,7 +252,7 @@ fn basic_parse(filename: &str) -> Parser {
     Parser {
         lexer: lexer(filename),
         stack: vec![],
-        state: State::Event,
+        state: State::Event(false),
     }
 }
 
