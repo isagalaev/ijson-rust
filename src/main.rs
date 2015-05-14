@@ -1,5 +1,3 @@
-extern crate ijson_rust;
-
 use std::fs::File;
 use std::io::Read;
 use std::str;
