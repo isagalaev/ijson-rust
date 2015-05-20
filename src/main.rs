@@ -159,11 +159,11 @@ impl Parser {
         } else if lexeme == b"}" {
             Event::EndMap
         } else {
-            let s = str::from_utf8(lexeme).unwrap();
-            Event::Number(match s.parse() {
-                Err(_) => panic!("Unexpected lexeme {:?}", lexeme),
-                Ok(result) => result,
-            })
+            Event::Number(
+                str::from_utf8(lexeme).unwrap()
+                .parse().ok()
+                .expect(&format!("Unexpected lexeme {:?}", lexeme))
+            )
         }
     }
 
