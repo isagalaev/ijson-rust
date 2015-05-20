@@ -241,8 +241,7 @@ impl Iterator for Parser {
                         self.state = State::Event(true);
                         continue;
                     }
-                    let lexeme = self.consume_lexeme();
-                    if lexeme != b"," {
+                    if self.consume_lexeme() != b"," {
                         panic!("Unexpected lexeme");
                     }
                     self.state = if self.stack[self.stack.len() - 1] == b'[' {
