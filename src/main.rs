@@ -141,7 +141,7 @@ impl Parser {
         }
     }
 
-    fn process_event(&mut self, lexeme: &[u8]) -> Event {
+    fn process_event(&self, lexeme: &[u8]) -> Event {
         if lexeme == b"null" {
             Event::Null
         } else if lexeme == b"true" {
@@ -151,21 +151,13 @@ impl Parser {
         } else if lexeme[0] == b'"' {
             Event::String(str::from_utf8(lexeme).unwrap().to_string())
         } else if lexeme == b"[" {
-            self.stack.push(b'[');
             Event::StartArray
         } else if lexeme == b"{" {
-            self.stack.push(b'{');
             Event::StartMap
         } else if lexeme == b"]" {
-            match self.stack.pop() {
-                Some(b'[') => Event::EndArray,
-                _ => panic!("Unmatched ]"),
-            }
+            Event::EndArray
         } else if lexeme == b"}" {
-            match self.stack.pop() {
-                Some(b'{') => Event::EndMap,
-                _ => panic!("Unmatched }"),
-            }
+            Event::EndMap
         } else {
             let s = str::from_utf8(lexeme).unwrap();
             Event::Number(match s.parse() {
@@ -195,7 +187,21 @@ impl Iterator for Parser {
                         panic!("Unexpected lexeme")
                     }
 
-                    let result = self.process_event(&lexeme);
+                    if lexeme == b"[" {
+                        self.stack.push(b'[');
+                    } else if lexeme == b"{" {
+                        self.stack.push(b'{');
+                    } else if lexeme == b"]" {
+                        match self.stack.pop() {
+                            Some(b'[') => (),
+                            _ => panic!("Unmatched ]"),
+                        }
+                    } else if lexeme == b"}" {
+                        match self.stack.pop() {
+                            Some(b'{') => (),
+                            _ => panic!("Unmatched }"),
+                        }
+                    }
 
                     self.state = if self.stack.len() == 0 {
                         State::Closed
@@ -207,7 +213,7 @@ impl Iterator for Parser {
                         State::Comma
                     };
 
-                    return Some(result)
+                    return Some(self.process_event(&lexeme))
                 }
                 State::Key(can_close) => {
                     if self.check_lexeme(&[b"}"]) {
