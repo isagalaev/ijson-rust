@@ -24,6 +24,7 @@ struct Lexer {
     len: usize,
     pos: usize,
     f: Box<Read>,
+    current: Option<Vec<u8>>,
 }
 
 impl Lexer {
@@ -38,12 +39,8 @@ impl Lexer {
             self.len > 0
         }
     }
-}
 
-impl Iterator for Lexer {
-    type Item = Vec<u8>;
-
-    fn next(&mut self) -> Option<Vec<u8>> {
+    fn read(&mut self) -> Option<Vec<u8>> {
         while self.ensure_buffer() && is_whitespace(self.buf[self.pos]) {
             self.pos += 1;
         }
@@ -88,6 +85,20 @@ impl Iterator for Lexer {
         }
         Some(result)
     }
+
+    fn lookup(&mut self) -> Option<&Vec<u8>> {
+        if self.current.is_none() {
+            self.current = self.read()
+        }
+        self.current.as_ref()
+    }
+
+    fn consume(&mut self) -> Option<Vec<u8>> {
+        match self.current.take() {
+            None => self.read(),
+            Some(v) => Some(v),
+        }
+    }
 }
 
 fn lexer(f: Box<Read>) -> Lexer {
@@ -96,6 +107,7 @@ fn lexer(f: Box<Read>) -> Lexer {
         len: 0,
         pos: 0,
         f: f,
+        current: None,
     }
 }
 
@@ -129,8 +141,8 @@ struct Parser {
 
 impl Parser {
 
-    fn next_lexeme(&mut self) -> Vec<u8> {
-        self.lexer.next().expect("More lexemes expected")
+    fn consume_lexeme(&mut self) -> Vec<u8> {
+        self.lexer.consume().expect("More lexemes expected")
     }
 
     fn process_event(&mut self, lexeme: &[u8]) -> Event {
@@ -189,20 +201,20 @@ impl Iterator for Parser {
         loop {
             match self.state {
                 State::Closed => {
-                    match self.lexer.next() {
+                    match self.lexer.consume() {
                         Some(_) => panic!("Additional data"),
                         None => return None,
                     }
                 }
                 State::Event(can_close) => {
-                    let lexeme = self.next_lexeme();
+                    let lexeme = self.consume_lexeme();
                     if (lexeme == b"]" || lexeme == b"}") && !can_close {
                         panic!("Unexpected lexeme")
                     }
                     return Some(self.process_event(&lexeme))
                 }
                 State::Key(can_close) => {
-                    let lexeme = self.next_lexeme();
+                    let lexeme = self.consume_lexeme();
                     return if lexeme == b"}" {
                         if !can_close {
                             panic!("Unexpected lexeme")
@@ -216,13 +228,13 @@ impl Iterator for Parser {
                     }
                 }
                 State::Colon => {
-                    if self.next_lexeme() != b":" {
+                    if self.consume_lexeme() != b":" {
                         panic!("Unexpected lexeme")
                     }
                     self.state = State::Event(false);
                 }
                 State::Comma => {
-                    let lexeme = self.next_lexeme();
+                    let lexeme = self.consume_lexeme();
                     if lexeme == b"]" || lexeme == b"}" {
                         return Some(self.process_event(&lexeme));
                     }
