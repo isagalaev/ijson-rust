@@ -153,8 +153,7 @@ impl Parser {
     }
 
     fn process_event(&mut self, lexeme: &[u8]) -> Event {
-
-        let result = if lexeme == b"null" {
+        if lexeme == b"null" {
             Event::Null
         } else if lexeme == b"true" {
             Event::Boolean(true)
@@ -184,19 +183,7 @@ impl Parser {
                 Err(_) => panic!("Unexpected lexeme {:?}", lexeme),
                 Ok(result) => result,
             })
-        };
-
-        self.state = if self.stack.len() == 0 {
-            State::Closed
-        } else if lexeme == b"[" {
-            State::Event(true)
-        } else if lexeme == b"{" {
-            State::Key(true)
-        } else {
-            State::Comma
-        };
-
-        result
+        }
     }
 
 }
@@ -218,7 +205,20 @@ impl Iterator for Parser {
                     if (lexeme == b"]" || lexeme == b"}") && !can_close {
                         panic!("Unexpected lexeme")
                     }
-                    return Some(self.process_event(&lexeme))
+
+                    let result = self.process_event(&lexeme);
+
+                    self.state = if self.stack.len() == 0 {
+                        State::Closed
+                    } else if lexeme == b"[" {
+                        State::Event(true)
+                    } else if lexeme == b"{" {
+                        State::Key(true)
+                    } else {
+                        State::Comma
+                    };
+
+                    return Some(result)
                 }
                 State::Key(can_close) => {
                     if self.check_lexeme(&[b"}"]) {
