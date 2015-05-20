@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::Read;
 use std::str;
+use std::iter::Peekable;
 
 const BUFSIZE: usize = 10;
 
@@ -24,7 +25,6 @@ struct Lexer {
     len: usize,
     pos: usize,
     f: Box<Read>,
-    current: Option<Vec<u8>>,
 }
 
 impl Lexer {
@@ -39,8 +39,12 @@ impl Lexer {
             self.len > 0
         }
     }
+}
 
-    fn read(&mut self) -> Option<Vec<u8>> {
+impl Iterator for Lexer {
+    type Item = Vec<u8>;
+
+    fn next(&mut self) -> Option<Vec<u8>> {
         while self.ensure_buffer() && is_whitespace(self.buf[self.pos]) {
             self.pos += 1;
         }
@@ -85,20 +89,6 @@ impl Lexer {
         }
         Some(result)
     }
-
-    fn peek(&mut self) -> Option<&Vec<u8>> {
-        if self.current.is_none() {
-            self.current = self.read()
-        }
-        self.current.as_ref()
-    }
-
-    fn consume(&mut self) -> Option<Vec<u8>> {
-        match self.current.take() {
-            None => self.read(),
-            Some(v) => Some(v),
-        }
-    }
 }
 
 fn lexer(f: Box<Read>) -> Lexer {
@@ -107,7 +97,6 @@ fn lexer(f: Box<Read>) -> Lexer {
         len: 0,
         pos: 0,
         f: f,
-        current: None,
     }
 }
 
@@ -134,7 +123,7 @@ enum State {
 }
 
 struct Parser {
-    lexer: Lexer, // TODO: iterator of Vec<u8>
+    lexer: Peekable<Lexer>,
     stack: Vec<u8>,
     state: State,
 }
@@ -142,7 +131,7 @@ struct Parser {
 impl Parser {
 
     fn consume_lexeme(&mut self) -> Vec<u8> {
-        self.lexer.consume().expect("More lexemes expected")
+        self.lexer.next().expect("More lexemes expected")
     }
 
     fn check_lexeme(&mut self, lexemes: &[&[u8]]) -> bool {
@@ -263,7 +252,7 @@ impl Iterator for Parser {
 
 fn basic_parse(f: Box<Read>) -> Parser {
     Parser {
-        lexer: lexer(f),
+        lexer: lexer(f).peekable(),
         stack: vec![],
         state: State::Event(false),
     }
