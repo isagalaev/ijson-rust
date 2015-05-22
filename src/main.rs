@@ -142,24 +142,16 @@ impl Parser {
     }
 
     fn process_event(&self, lexeme: &[u8]) -> Event {
-        if lexeme == b"null" {
-            Event::Null
-        } else if lexeme == b"true" {
-            Event::Boolean(true)
-        } else if lexeme == b"false" {
-            Event::Boolean(false)
-        } else if lexeme[0] == b'"' {
-            Event::String(str::from_utf8(lexeme).unwrap().to_string())
-        } else if lexeme == b"[" {
-            Event::StartArray
-        } else if lexeme == b"{" {
-            Event::StartMap
-        } else if lexeme == b"]" {
-            Event::EndArray
-        } else if lexeme == b"}" {
-            Event::EndMap
-        } else {
-            Event::Number(
+        match lexeme {
+            b"null" => Event::Null,
+            b"true" => Event::Boolean(true),
+            b"false" => Event::Boolean(false),
+            b"[" => Event::StartArray,
+            b"{" => Event::StartMap,
+            b"]" => Event::EndArray,
+            b"}" => Event::EndMap,
+            _ if lexeme[0] == b'"' => Event::String(str::from_utf8(lexeme).unwrap().to_string()),
+            _ => Event::Number(
                 str::from_utf8(lexeme).unwrap()
                 .parse().ok()
                 .expect(&format!("Unexpected lexeme {:?}", lexeme))
@@ -167,6 +159,13 @@ impl Parser {
         }
     }
 
+    #[inline]
+    fn assert_top_eq(&mut self, expected_top: u8, actual_top: u8) {
+        match self.stack.pop() {
+            Some(value) if value == expected_top => (),
+            _ => panic!("Unmatched {}", actual_top as char)
+        }
+    }
 }
 
 impl Iterator for Parser {
@@ -187,30 +186,18 @@ impl Iterator for Parser {
                         panic!("Unexpected lexeme")
                     }
 
-                    if lexeme == b"[" {
-                        self.stack.push(b'[');
-                    } else if lexeme == b"{" {
-                        self.stack.push(b'{');
-                    } else if lexeme == b"]" {
-                        match self.stack.pop() {
-                            Some(b'[') => (),
-                            _ => panic!("Unmatched ]"),
-                        }
-                    } else if lexeme == b"}" {
-                        match self.stack.pop() {
-                            Some(b'{') => (),
-                            _ => panic!("Unmatched }"),
-                        }
-                    }
+                    match &lexeme as &[u8] {
+                        b"[" | b"{" => self.stack.push(lexeme[0]),
+                        b"]" => self.assert_top_eq(b'[', b']'),
+                        b"}" => self.assert_top_eq(b'{', b'}'),
+                        _ => ()
+                    };
 
-                    self.state = if self.stack.len() == 0 {
-                        State::Closed
-                    } else if lexeme == b"[" {
-                        State::Event(true)
-                    } else if lexeme == b"{" {
-                        State::Key(true)
-                    } else {
-                        State::Comma
+                    self.state = match (self.stack.len(), &lexeme[..]) {
+                        (0, _) => State::Closed,
+                        (_, b"[") => State::Event(true),
+                        (_, b"{") => State::Key(true),
+                        _ => State::Comma
                     };
 
                     return Some(self.process_event(&lexeme))
