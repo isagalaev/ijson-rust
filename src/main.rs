@@ -193,11 +193,14 @@ impl Iterator for Parser {
                         _ => ()
                     };
 
-                    self.state = match (self.stack.len(), &lexeme[..]) {
-                        (0, _) => State::Closed,
-                        (_, b"[") => State::Event(true),
-                        (_, b"{") => State::Key(true),
-                        _ => State::Comma
+                    self.state = if self.stack.len() == 0 {
+                        State::Closed
+                    } else if lexeme == b"[" {
+                        State::Event(true)
+                    } else if lexeme == b"{" {
+                        State::Key(true)
+                    } else {
+                        State::Comma
                     };
 
                     return Some(self.process_event(&lexeme))
