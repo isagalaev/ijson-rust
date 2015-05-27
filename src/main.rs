@@ -186,7 +186,7 @@ impl Iterator for Parser {
                         panic!("Unexpected lexeme")
                     }
 
-                    match &lexeme as &[u8] {
+                    match &lexeme[..] {
                         b"[" | b"{" => self.stack.push(lexeme[0]),
                         b"]" => self.assert_top_eq(b'[', b']'),
                         b"}" => self.assert_top_eq(b'{', b'}'),
