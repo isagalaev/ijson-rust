@@ -160,10 +160,11 @@ impl Parser {
     }
 
     #[inline]
-    fn assert_top_eq(&mut self, expected_top: u8, actual_top: u8) {
+    fn assert_top_eq(&mut self, actual: u8) {
+        let expected = if actual == b']' { b'[' } else { b'{' };
         match self.stack.pop() {
-            Some(value) if value == expected_top => (),
-            _ => panic!("Unmatched {}", actual_top as char)
+            Some(value) if value == expected => (),
+            _ => panic!("Unmatched {}", actual as char)
         }
     }
 }
@@ -188,8 +189,7 @@ impl Iterator for Parser {
 
                     match &lexeme[..] {
                         b"[" | b"{" => self.stack.push(lexeme[0]),
-                        b"]" => self.assert_top_eq(b'[', b']'),
-                        b"}" => self.assert_top_eq(b'{', b'}'),
+                        b"]" | b"}" => self.assert_top_eq(lexeme[0]),
                         _ => ()
                     };
 
