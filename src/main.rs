@@ -183,11 +183,9 @@ impl Iterator for Parser {
                 }
                 State::Event(can_close) => {
                     let lexeme = self.consume_lexeme();
-                    if (lexeme == b"]" || lexeme == b"}") && !can_close {
-                        panic!("Unexpected lexeme")
-                    }
 
                     match &lexeme[..] {
+                        b"]" | b"}" if !can_close => panic!("Unexpected lexeme"),
                         b"[" | b"{" => self.stack.push(lexeme[0]),
                         b"]" | b"}" => self.assert_top_eq(lexeme[0]),
                         _ => ()
