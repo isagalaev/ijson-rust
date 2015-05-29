@@ -282,6 +282,10 @@ fn basic_parse(f: Box<Read>) -> Parser {
 fn main() {
     let f = Box::new(File::open("test.json").unwrap());
     for event in basic_parse(f) {
-        println!("{:?}", event);
+        match event {
+            Event::String(s) => println!("String({})", s),
+            Event::Key(s) => println!("Key({})", s),
+            _ => println!("{:?}", event),
+        }
     }
 }
