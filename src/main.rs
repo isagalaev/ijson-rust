@@ -134,9 +134,8 @@ fn unescape(s: &str) -> String {
         } else {
             match chars.next() {
                 Some('u') => {
-                    let value: String = chars.by_ref().take(4).collect();
-                    let i = u32::from_str_radix(&value, 16).unwrap();
-                    result.push(char::from_u32(i).unwrap());
+                    let value = chars.by_ref().take(4).fold(0, |acc, c| acc * 16 + c.to_digit(16).unwrap());
+                    result.push(char::from_u32(value).unwrap());
                 }
                 Some('b') => result.push('\x08'),
                 Some('f') => result.push('\x0c'),
