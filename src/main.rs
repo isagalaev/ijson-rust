@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::Read;
 use std::str;
 use std::iter::Peekable;
+use std::char;
 
 const BUFSIZE: usize = 10;
 
@@ -122,6 +123,34 @@ enum State {
     Comma,
 }
 
+//5:08:01 PM - XMPPwocky: isagalaev: you may want to write something on top of a Reader
+//5:08:21 PM - XMPPwocky: specifically something over a Cursor<Vec<u8>>, actually
+fn unescape(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            result.push(ch)
+        } else {
+            match chars.next() {
+                Some('u') => {
+                    let value: String = chars.by_ref().take(4).collect();
+                    let i = u32::from_str_radix(&value, 16).unwrap();
+                    result.push(char::from_u32(i).unwrap());
+                }
+                Some('b') => result.push('\x08'),
+                Some('f') => result.push('\x0c'),
+                Some('n') => result.push('\n'),
+                Some('r') => result.push('\r'),
+                Some('t') => result.push('\t'),
+                Some(ch) => result.push(ch),
+                _ => panic!("Malformed escaped"),
+            }
+        }
+    }
+    result
+}
+
 struct Parser {
     lexer: Peekable<Lexer>,
     stack: Vec<u8>,
@@ -150,7 +179,7 @@ impl Parser {
             b"{" => Event::StartMap,
             b"]" => Event::EndArray,
             b"}" => Event::EndMap,
-            _ if lexeme[0] == b'"' => Event::String(str::from_utf8(lexeme).unwrap().to_string()),
+            _ if lexeme[0] == b'"' => Event::String(unescape(str::from_utf8(lexeme).unwrap())),
             _ => Event::Number(
                 str::from_utf8(lexeme).unwrap()
                 .parse().ok()
