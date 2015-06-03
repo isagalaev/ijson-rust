@@ -7,11 +7,7 @@ use ijson_rust::parser;
 
 fn main() {
     let f = Box::new(File::open("test.json").unwrap());
-    for event in parser::basic_parse(f) {
-        match event {
-            parser::Event::String(s) => println!("String({})", s),
-            parser::Event::Key(s) => println!("Key({})", s),
-            _ => println!("{:?}", event),
-        }
+    for (prefix, event) in parser::parse(f) {
+        println!("{}: {:?}", prefix, event);
     }
 }

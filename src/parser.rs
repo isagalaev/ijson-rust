@@ -185,3 +185,55 @@ pub fn basic_parse(f: Box<Read>) -> Parser {
         state: State::Event(false),
     }
 }
+
+pub struct PrefixedParser {
+    path: Vec<String>,
+    parser: Parser,
+}
+
+impl Iterator for PrefixedParser {
+    type Item = (String, Event);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut prefix;
+        match self.parser.next() {
+            None => None,
+            Some(event) => {
+                match &event {
+                    &Event::Key(ref value) => {
+                        self.path.pop();
+                        prefix = self.path.connect(".");
+                        self.path.push(value.clone());
+                    }
+                    &Event::StartMap => {
+                        prefix = self.path.connect(".");
+                        self.path.push("".to_owned())
+                    }
+                    &Event::EndMap => {
+                        self.path.pop();
+                        prefix = self.path.connect(".");
+                    }
+                    &Event::StartArray => {
+                        prefix = self.path.connect(".");
+                        self.path.push("item".to_owned());
+                    }
+                    &Event::EndArray => {
+                        self.path.pop();
+                        prefix = self.path.connect(".");
+                    }
+                    _ => {
+                        prefix = self.path.connect(".");
+                    }
+                }
+                Some((prefix, event))
+            }
+        }
+    }
+}
+
+pub fn parse(f: Box<Read>) -> PrefixedParser {
+    PrefixedParser {
+        path: vec![],
+        parser: basic_parse(f),
+    }
+}
