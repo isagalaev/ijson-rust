@@ -28,6 +28,11 @@ enum State {
     Comma,
 }
 
+#[inline]
+fn to_str(lexeme: &[u8]) -> &str {
+    str::from_utf8(&lexeme[1..lexeme.len() - 1]).unwrap()
+}
+
 //5:08:01 PM - XMPPwocky: isagalaev: you may want to write something on top of a Reader
 //5:08:21 PM - XMPPwocky: specifically something over a Cursor<Vec<u8>>, actually
 fn unescape(s: &str) -> String {
@@ -85,7 +90,7 @@ impl Parser {
             b"{" => Event::StartMap,
             b"]" => Event::EndArray,
             b"}" => Event::EndMap,
-            _ if lexeme[0] == b'"' => Event::String(unescape(str::from_utf8(lexeme).unwrap())),
+            _ if lexeme[0] == b'"' => Event::String(unescape(to_str(lexeme))),
             _ => Event::Number(
                 str::from_utf8(lexeme).unwrap()
                 .parse().ok()
@@ -151,7 +156,7 @@ impl Iterator for Parser {
                         panic!("Unexpected lexeme")
                     }
                     self.state = State::Colon;
-                    return Some(Event::Key(str::from_utf8(&lexeme[..]).unwrap().to_string()));
+                    return Some(Event::Key(to_str(&lexeme).to_string()));
                 }
                 State::Colon => {
                     if self.consume_lexeme() != b":" {
