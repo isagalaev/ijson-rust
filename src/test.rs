@@ -1,10 +1,62 @@
 use std::fs::File;
 
-use super::parser;
+use super::parser::{basic_parse, Event};
+
+
+fn reference_events() -> Vec<Event> {
+    vec![
+    Event::StartMap,
+        Event::Key("docs".to_string()),
+        Event::StartArray,
+            Event::StartMap,
+                Event::Key("null".to_string()),
+                Event::Null,
+                Event::Key("boolean".to_string()),
+                Event::Boolean(false),
+                Event::Key("true".to_string()),
+                Event::Boolean(true),
+                Event::Key("integer".to_string()),
+                Event::Number(0f64),
+                Event::Key("double".to_string()),
+                Event::Number(0.5f64),
+                Event::Key("exponent".to_string()),
+                Event::Number(100f64),
+                Event::Key("long".to_string()),
+                Event::Number(10000000000f64),
+                Event::Key("string".to_string()),
+                Event::String("строка - тест".to_string()),
+            Event::EndMap,
+            Event::StartMap,
+                Event::Key("meta".to_string()),
+                Event::StartArray,
+                    Event::StartArray,
+                        Event::Number(1f64),
+                    Event::EndArray,
+                    Event::StartMap,
+                    Event::EndMap,
+                Event::EndArray,
+            Event::EndMap,
+            Event::StartMap,
+                Event::Key("meta".to_string()),
+                Event::StartMap,
+                    Event::Key("key".to_string()),
+                    Event::String("value".to_string()),
+                Event::EndMap,
+            Event::EndMap,
+            Event::StartMap,
+                Event::Key("meta".to_string()),
+                Event::Null,
+            Event::EndMap,
+        Event::EndArray,
+    Event::EndMap,
+    ]
+}
 
 
 #[test]
 fn test_basic_parse() {
     let f = Box::new(File::open("test.json").unwrap());
-    assert_eq!(parser::basic_parse(f).count(), 44);
+    let events: Vec<Event> = basic_parse(f).collect();
+    assert_eq!(events, reference_events());
 }
+
