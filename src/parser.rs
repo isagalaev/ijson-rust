@@ -7,6 +7,7 @@ use super::lexer;
 
 
 #[derive(Debug)]
+#[derive(PartialEq)]
 pub enum Event {
     Null,
     Boolean(bool),
@@ -17,23 +18,6 @@ pub enum Event {
     EndArray,
     StartMap,
     EndMap,
-}
-
-impl PartialEq for Event {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (&Event::Null, &Event::Null) => true,
-            (&Event::StartMap, &Event::StartMap) => true,
-            (&Event::EndMap, &Event::EndMap) => true,
-            (&Event::StartArray, &Event::StartArray) => true,
-            (&Event::EndArray, &Event::EndArray) => true,
-            (&Event::Boolean(ref lv), &Event::Boolean(ref rv)) => {lv == rv}
-            (&Event::String(ref lv), &Event::String(ref rv)) => {lv == rv}
-            (&Event::Key(ref lv), &Event::Key(ref rv)) => {lv == rv}
-            (&Event::Number(ref lv), &Event::Number(ref rv)) => {lv == rv}
-            _ => false,
-        }
-    }
 }
 
 #[derive(Debug)]
