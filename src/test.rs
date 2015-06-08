@@ -1,6 +1,6 @@
 use std::fs::File;
 
-use super::parser::{basic_parse, Event};
+use super::parser::{basic_parse, parse, Event};
 
 
 fn reference_events() -> Vec<Event> {
@@ -60,3 +60,56 @@ fn test_basic_parse() {
     assert_eq!(events, reference_events());
 }
 
+#[test]
+fn prefixes() {
+    let f = Box::new(File::open("test.json").unwrap());
+    let reference = [
+        "",
+        "",
+        "docs",
+        "docs.item",
+        "docs.item",
+        "docs.item.null",
+        "docs.item",
+        "docs.item.boolean",
+        "docs.item",
+        "docs.item.true",
+        "docs.item",
+        "docs.item.integer",
+        "docs.item",
+        "docs.item.double",
+        "docs.item",
+        "docs.item.exponent",
+        "docs.item",
+        "docs.item.long",
+        "docs.item",
+        "docs.item.string",
+        "docs.item",
+        "docs.item",
+        "docs.item",
+        "docs.item.meta",
+        "docs.item.meta.item",
+        "docs.item.meta.item.item",
+        "docs.item.meta.item",
+        "docs.item.meta.item",
+        "docs.item.meta.item",
+        "docs.item.meta",
+        "docs.item",
+        "docs.item",
+        "docs.item",
+        "docs.item.meta",
+        "docs.item.meta",
+        "docs.item.meta.key",
+        "docs.item.meta",
+        "docs.item",
+        "docs.item",
+        "docs.item",
+        "docs.item.meta",
+        "docs.item",
+        "docs",
+        "",
+    ];
+    assert!(
+        parse(f).map(|(p, _)| p).zip(reference.iter()).all(|(p, &r)| p == r)
+    )
+}

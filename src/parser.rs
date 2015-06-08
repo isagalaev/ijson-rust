@@ -201,35 +201,27 @@ impl Iterator for PrefixedParser {
     type Item = (String, Event);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut prefix;
         match self.parser.next() {
             None => None,
             Some(event) => {
                 match &event {
-                    &Event::Key(ref value) => {
+                    &Event::Key(_) | &Event::EndMap | &Event::EndArray => {
                         self.path.pop();
-                        prefix = self.path.connect(".");
+                    }
+                    _ => (),
+                }
+                let prefix = self.path.connect(".");
+                match &event {
+                    &Event::Key(ref value) => {
                         self.path.push(value.clone());
                     }
                     &Event::StartMap => {
-                        prefix = self.path.connect(".");
                         self.path.push("".to_owned())
                     }
-                    &Event::EndMap => {
-                        self.path.pop();
-                        prefix = self.path.connect(".");
-                    }
                     &Event::StartArray => {
-                        prefix = self.path.connect(".");
                         self.path.push("item".to_owned());
                     }
-                    &Event::EndArray => {
-                        self.path.pop();
-                        prefix = self.path.connect(".");
-                    }
-                    _ => {
-                        prefix = self.path.connect(".");
-                    }
+                    _ => (),
                 }
                 Some((prefix, event))
             }
