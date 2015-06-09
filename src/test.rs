@@ -109,7 +109,7 @@ fn prefixes() {
         "docs",
         "",
     ];
-    assert!(
-        parse(f).map(|(p, _)| p).zip(reference.iter()).all(|(p, &r)| p == r)
-    )
+    for (p, &r) in parse(f).map(|(p, _)| p).zip(reference.iter()) {
+        assert_eq!(p, r)
+    }
 }
