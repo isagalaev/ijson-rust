@@ -30,35 +30,42 @@ enum State {
 }
 
 #[inline]
-fn to_str(lexeme: &[u8]) -> &str {
-    str::from_utf8(&lexeme[1..lexeme.len() - 1]).unwrap()
+fn trim(lexeme: &[u8]) -> &[u8] {
+    &lexeme[1..lexeme.len() - 1]
 }
 
-//5:08:01 PM - XMPPwocky: isagalaev: you may want to write something on top of a Reader
-//5:08:21 PM - XMPPwocky: specifically something over a Cursor<Vec<u8>>, actually
-fn unescape(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    let mut chars = s.chars();
-    while let Some(ch) = chars.next() {
-        result.push(
-            if ch != '\\' {
-                ch
-            } else {
-                match chars.next() {
-                    Some('u') => {
-                        let value = chars.by_ref().take(4).fold(0, |acc, c| acc * 16 + c.to_digit(16).unwrap());
-                        char::from_u32(value).unwrap()
-                    }
-                    Some('b') => '\x08',
-                    Some('f') => '\x0c',
-                    Some('n') => '\n',
-                    Some('r') => '\r',
-                    Some('t') => '\t',
-                    Some(ch) => ch,
-                    _ => panic!("Malformed escape"),
-                }
+fn unescape(lexeme: &[u8]) -> String {
+    let len = lexeme.len();
+    let mut result = String::with_capacity(lexeme.len());
+
+    let mut pos = 0;
+    while pos < len {
+        let start = pos;
+        while pos < len && lexeme[pos] != b'\\' {
+            pos += 1;
+        }
+        result.push_str(str::from_utf8(&lexeme[start..pos]).unwrap());
+        if pos < len {
+            pos += 1;
+            if pos >= len {
+                panic!("Malformed escape");
             }
-        )
+            result.push(match lexeme[pos] {
+                b'u' => {
+                    let value = lexeme[pos+1..pos+5].iter().fold(0, |acc, &c| acc * 16 + (c as char).to_digit(16).unwrap());
+                    pos += 4;
+                    char::from_u32(value).unwrap()
+                }
+                b'b' => '\x08',
+                b'f' => '\x0c',
+                b'n' => '\n',
+                b'r' => '\r',
+                b't' => '\t',
+                b @ b'"' | b @ b'\\' => b as char,
+                _ => panic!("Malformed escape"),
+            });
+            pos += 1;
+        }
     }
     result
 }
@@ -91,7 +98,7 @@ impl Parser {
             b"{" => Event::StartMap,
             b"]" => Event::EndArray,
             b"}" => Event::EndMap,
-            _ if lexeme[0] == b'"' => Event::String(unescape(to_str(lexeme))),
+            _ if lexeme[0] == b'"' => Event::String(unescape(trim(lexeme))),
             _ => Event::Number(
                 str::from_utf8(lexeme).unwrap()
                 .parse().ok()
@@ -157,7 +164,7 @@ impl Iterator for Parser {
                         panic!("Unexpected lexeme")
                     }
                     self.state = State::Colon;
-                    return Some(Event::Key(to_str(&lexeme).to_string()));
+                    return Some(Event::Key(str::from_utf8(trim(&lexeme)).unwrap().to_string()));
                 }
                 State::Colon => {
                     if self.consume_lexeme() != b":" {
