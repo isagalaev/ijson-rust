@@ -1,7 +1,7 @@
 use std::io::Read;
 
 
-const BUFSIZE: usize = 10;
+const BUFSIZE: usize = 64 * 1024;
 
 
 fn is_whitespace(value: u8) -> bool {
