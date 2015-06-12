@@ -46,12 +46,12 @@ fn unescape(lexeme: &[u8]) -> String {
         }
         result.push_str(str::from_utf8(&lexeme[start..pos]).unwrap());
         if pos < len {
-            pos += 1;
-            if pos >= len {
-                panic!("Malformed escape");
-            }
+            pos += 1; // safe to do as the lexer makes sure there's at lease one character after \
             result.push(match lexeme[pos] {
                 b'u' => {
+                    if pos + 4 >= len {
+                        panic!("Malformed escape")
+                    }
                     let value = lexeme[pos+1..pos+5].iter().fold(0, |acc, &c| acc * 16 + (c as char).to_digit(16).unwrap());
                     pos += 4;
                     char::from_u32(value).unwrap()
