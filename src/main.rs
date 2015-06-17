@@ -14,7 +14,7 @@ fn main() {
         panic!("Provide filename")
     }
     let f = Box::new(File::open(&args[1]).unwrap());
-    let p = parser::basic_parse(f);
+    let p = parser::Parser::new(f);
     let mut count = 0;
 
     println!("{}", Duration::span(|| {

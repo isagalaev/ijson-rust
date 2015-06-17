@@ -78,6 +78,14 @@ pub struct Parser {
 
 impl Parser {
 
+    pub fn new(f: Box<Read>) -> Parser {
+        Parser {
+            lexer: lexer::Lexer::new(f).peekable(),
+            stack: vec![],
+            state: State::Event(false),
+        }
+    }
+
     fn consume_lexeme(&mut self) -> Vec<u8> {
         self.lexer.next().expect("More lexemes expected")
     }
@@ -191,17 +199,18 @@ impl Iterator for Parser {
     }
 }
 
-pub fn basic_parse(f: Box<Read>) -> Parser {
-    Parser {
-        lexer: lexer::lexer(f).peekable(),
-        stack: vec![],
-        state: State::Event(false),
-    }
-}
-
 pub struct PrefixedParser {
     path: Vec<String>,
     parser: Parser,
+}
+
+impl PrefixedParser {
+    pub fn new(f: Box<Read>) -> PrefixedParser {
+        PrefixedParser {
+            path: vec![],
+            parser: Parser::new(f),
+        }
+    }
 }
 
 impl Iterator for PrefixedParser {
@@ -233,12 +242,5 @@ impl Iterator for PrefixedParser {
                 Some((prefix, event))
             }
         }
-    }
-}
-
-pub fn parse(f: Box<Read>) -> PrefixedParser {
-    PrefixedParser {
-        path: vec![],
-        parser: basic_parse(f),
     }
 }

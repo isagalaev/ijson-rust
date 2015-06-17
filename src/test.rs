@@ -1,6 +1,6 @@
 use std::fs::File;
 
-use super::parser::{basic_parse, parse, Event};
+use super::parser::{Parser, PrefixedParser, Event};
 
 
 fn reference_events() -> Vec<Event> {
@@ -54,9 +54,9 @@ fn reference_events() -> Vec<Event> {
 
 
 #[test]
-fn test_basic_parse() {
+fn parser() {
     let f = Box::new(File::open("test.json").unwrap());
-    let events: Vec<Event> = basic_parse(f).collect();
+    let events: Vec<Event> = Parser::new(f).collect();
     assert_eq!(events, reference_events());
 }
 
@@ -109,7 +109,7 @@ fn prefixes() {
         "docs",
         "",
     ];
-    for (p, &r) in parse(f).map(|(p, _)| p).zip(reference.iter()) {
+    for (p, &r) in PrefixedParser::new(f).map(|(p, _)| p).zip(reference.iter()) {
         assert_eq!(p, r)
     }
 }

@@ -27,6 +27,16 @@ pub struct Lexer {
 }
 
 impl Lexer {
+
+    pub fn new(f: Box<Read>) -> Lexer {
+        Lexer {
+            buf: [0; BUFSIZE],
+            len: 0,
+            pos: 0,
+            f: f,
+        }
+    }
+
     fn ensure_buffer(&mut self) -> bool {
         if self.pos < self.len {
             true
@@ -87,14 +97,5 @@ impl Iterator for Lexer {
             }
         }
         Some(result)
-    }
-}
-
-pub fn lexer(f: Box<Read>) -> Lexer {
-    Lexer {
-        buf: [0; BUFSIZE],
-        len: 0,
-        pos: 0,
-        f: f,
     }
 }
