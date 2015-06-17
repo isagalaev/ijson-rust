@@ -1,6 +1,6 @@
 use std::fs::File;
 
-use super::parser::{Parser, PrefixedParser, Event};
+use super::parser::{Parser, Event};
 
 
 fn reference_events() -> Vec<Event> {
@@ -63,53 +63,16 @@ fn parser() {
 #[test]
 fn prefixes() {
     let f = Box::new(File::open("test.json").unwrap());
-    let reference = [
-        "",
-        "",
-        "docs",
-        "docs.item",
-        "docs.item",
-        "docs.item.null",
-        "docs.item",
-        "docs.item.boolean",
-        "docs.item",
-        "docs.item.true",
-        "docs.item",
-        "docs.item.integer",
-        "docs.item",
-        "docs.item.double",
-        "docs.item",
-        "docs.item.exponent",
-        "docs.item",
-        "docs.item.long",
-        "docs.item",
-        "docs.item.string",
-        "docs.item",
-        "docs.item",
-        "docs.item",
-        "docs.item.meta",
-        "docs.item.meta.item",
-        "docs.item.meta.item.item",
-        "docs.item.meta.item",
-        "docs.item.meta.item",
-        "docs.item.meta.item",
-        "docs.item.meta",
-        "docs.item",
-        "docs.item",
-        "docs.item",
-        "docs.item.meta",
-        "docs.item.meta",
-        "docs.item.meta.key",
-        "docs.item.meta",
-        "docs.item",
-        "docs.item",
-        "docs.item",
-        "docs.item.meta",
-        "docs.item",
-        "docs",
-        "",
-    ];
-    for (p, &r) in PrefixedParser::new(f).map(|(p, _)| p).zip(reference.iter()) {
-        assert_eq!(p, r)
-    }
+    let result: Vec<_> = Parser::new(f).prefix("docs.item.null").collect();
+    assert_eq!(result, vec![Event::Null]);
+
+    let f = Box::new(File::open("test.json").unwrap());
+    let result: Vec<_> = Parser::new(f).prefix("docs.item.meta.item").collect();
+    assert_eq!(result, vec![
+        Event::StartArray,
+        Event::Number(1f64),
+        Event::EndArray,
+        Event::StartMap,
+        Event::EndMap,
+    ]);
 }

@@ -123,6 +123,14 @@ impl Parser {
             _ => panic!("Unmatched {}", actual as char)
         }
     }
+
+    pub fn prefix(self, prefix: &str) -> Filter {
+        Filter {
+            reference: prefix.split(".").map(|s| s.to_string()).collect(),
+            path: vec![],
+            parser: self,
+        }
+    }
 }
 
 impl Iterator for Parser {
@@ -199,47 +207,45 @@ impl Iterator for Parser {
     }
 }
 
-pub struct PrefixedParser {
+pub struct Filter {
+    reference: Vec<String>,
     path: Vec<String>,
     parser: Parser,
 }
 
-impl PrefixedParser {
-    pub fn new(f: Box<Read>) -> PrefixedParser {
-        PrefixedParser {
-            path: vec![],
-            parser: Parser::new(f),
-        }
-    }
-}
-
-impl Iterator for PrefixedParser {
-    type Item = (String, Event);
+impl Iterator for Filter {
+    type Item = Event;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.parser.next() {
-            None => None,
-            Some(event) => {
-                match &event {
-                    &Event::Key(_) | &Event::EndMap | &Event::EndArray => {
-                        self.path.pop();
+        loop {
+            match self.parser.next() {
+                None => return None,
+                Some(event) => {
+                    match &event {
+                        &Event::Key(_) | &Event::EndMap | &Event::EndArray => {
+                            self.path.pop();
+                        }
+                        _ => (),
                     }
-                    _ => (),
+
+                    let found = self.path.starts_with(&self.reference);
+
+                    match &event {
+                        &Event::Key(ref value) => {
+                            self.path.push(value.clone());
+                        }
+                        &Event::StartMap => {
+                            self.path.push("".to_owned())
+                        }
+                        &Event::StartArray => {
+                            self.path.push("item".to_owned());
+                        }
+                        _ => (),
+                    }
+                    if found {
+                        return Some(event)
+                    }
                 }
-                let prefix = self.path.connect(".");
-                match &event {
-                    &Event::Key(ref value) => {
-                        self.path.push(value.clone());
-                    }
-                    &Event::StartMap => {
-                        self.path.push("".to_owned())
-                    }
-                    &Event::StartArray => {
-                        self.path.push("item".to_owned());
-                    }
-                    _ => (),
-                }
-                Some((prefix, event))
             }
         }
     }
