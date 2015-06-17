@@ -1,14 +1,15 @@
 extern crate ijson_rust;
 extern crate time;
 
-use std::fs::File;
-use std::env;
-
-use ijson_rust::parser;
-use time::Duration;
-
-
+#[cfg(not(test))]
 fn main() {
+
+    use std::fs::File;
+    use std::env;
+
+    use ijson_rust::parser;
+    use time::Duration;
+
     let args: Vec<_> = env::args().collect();
     if args.len() < 2 {
         panic!("Provide filename")
