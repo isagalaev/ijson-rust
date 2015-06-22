@@ -217,36 +217,33 @@ impl Iterator for Filter {
     type Item = Event;
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match self.parser.next() {
-                None => return None,
-                Some(event) => {
-                    match &event {
-                        &Event::Key(_) | &Event::EndMap | &Event::EndArray => {
-                            self.path.pop();
-                        }
-                        _ => (),
-                    }
-
-                    let found = self.path.starts_with(&self.reference);
-
-                    match &event {
-                        &Event::Key(ref value) => {
-                            self.path.push(value.clone());
-                        }
-                        &Event::StartMap => {
-                            self.path.push("".to_owned())
-                        }
-                        &Event::StartArray => {
-                            self.path.push("item".to_owned());
-                        }
-                        _ => (),
-                    }
-                    if found {
-                        return Some(event)
-                    }
+        while let Some(event) = self.parser.next() {
+            match &event {
+                &Event::Key(_) | &Event::EndMap | &Event::EndArray => {
+                    self.path.pop();
                 }
+                _ => (),
+            }
+
+            let found = self.path.starts_with(&self.reference);
+
+            match &event {
+                &Event::Key(ref value) => {
+                    self.path.push(value.clone());
+                }
+                &Event::StartMap => {
+                    self.path.push("".to_owned())
+                }
+                &Event::StartArray => {
+                    self.path.push("item".to_owned());
+                }
+                _ => (),
+            }
+
+            if found {
+                return Some(event)
             }
         }
+        None
     }
 }
