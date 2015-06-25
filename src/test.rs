@@ -1,6 +1,8 @@
 use std::fs::File;
+use std::collections::HashMap;
 
 use super::parser::{Parser, Event};
+use super::builder::{Items, Value};
 
 
 fn reference_events() -> Vec<Event> {
@@ -74,5 +76,16 @@ fn prefixes() {
         Event::EndArray,
         Event::StartMap,
         Event::EndMap,
+    ]);
+}
+
+#[test]
+fn items() {
+    let f = Box::new(File::open("test.json").unwrap());
+    let items = Items::new(Parser::new(f).prefix("docs.item.meta.item"));
+    let result: Vec<_> = items.collect();
+    assert_eq!(result, vec![
+        Value::Array(vec![Value::Number(1f64)]),
+        Value::Map(HashMap::new()),
     ]);
 }
