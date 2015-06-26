@@ -2,7 +2,7 @@ use std::fs::File;
 use std::collections::HashMap;
 
 use super::parser::{Parser, Event};
-use super::builder::{IntoItems, Value};
+use super::builder::{Builder, Value};
 
 
 fn reference_events() -> Vec<Event> {

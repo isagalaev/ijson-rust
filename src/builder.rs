@@ -3,6 +3,47 @@ use std::collections::HashMap;
 use super::parser::Event;
 
 
+pub struct Prefix<E> where E: Iterator<Item=Event> {
+    reference: Vec<String>,
+    path: Vec<String>,
+    parser: E,
+}
+
+impl<E> Iterator for Prefix<E> where E: Iterator<Item=Event> {
+    type Item = Event;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(event) = self.parser.next() {
+            match &event {
+                &Event::Key(_) | &Event::EndMap | &Event::EndArray => {
+                    self.path.pop();
+                }
+                _ => (),
+            }
+
+            let found = self.path.starts_with(&self.reference);
+
+            match &event {
+                &Event::Key(ref value) => {
+                    self.path.push(value.clone());
+                }
+                &Event::StartMap => {
+                    self.path.push("".to_owned())
+                }
+                &Event::StartArray => {
+                    self.path.push("item".to_owned());
+                }
+                _ => (),
+            }
+
+            if found {
+                return Some(event)
+            }
+        }
+        None
+    }
+}
+
 #[derive(Debug)]
 #[derive(PartialEq)]
 pub enum Value {
@@ -16,11 +57,11 @@ pub enum Value {
 pub type Map = HashMap<String, Value>;
 pub type Array = Vec<Value>;
 
-pub struct Items<I> where I: Iterator<Item=Event> {
-    events: I,
+pub struct Items<E> where E: Iterator<Item=Event> {
+    events: E,
 }
 
-impl<I> Iterator for Items<I> where I: Iterator<Item=Event> {
+impl<E> Iterator for Items<E> where E: Iterator<Item=Event> {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -56,7 +97,16 @@ impl<I> Iterator for Items<I> where I: Iterator<Item=Event> {
     }
 }
 
-pub trait IntoItems {
+pub trait Builder {
+
+    fn prefix(self, prefix: &str) -> Prefix<Self> where Self: Sized + Iterator<Item=Event> {
+        Prefix {
+            reference: prefix.split(".").map(|s| s.to_string()).collect(),
+            path: vec![],
+            parser: self,
+        }
+    }
+
     fn items(self) -> Items<Self> where Self: Sized + Iterator<Item=Event> {
         Items {
             events: self,
@@ -64,4 +114,4 @@ pub trait IntoItems {
     }
 }
 
-impl<T> IntoItems for T {}
+impl<T> Builder for T {}
