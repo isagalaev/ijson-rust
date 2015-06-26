@@ -124,8 +124,8 @@ impl Parser {
         }
     }
 
-    pub fn prefix(self, prefix: &str) -> Filter {
-        Filter {
+    pub fn prefix(self, prefix: &str) -> Prefix {
+        Prefix {
             reference: prefix.split(".").map(|s| s.to_string()).collect(),
             path: vec![],
             parser: self,
@@ -208,13 +208,13 @@ impl Iterator for Parser {
     }
 }
 
-pub struct Filter {
+pub struct Prefix {
     reference: Vec<String>,
     path: Vec<String>,
     parser: Parser,
 }
 
-impl Iterator for Filter {
+impl Iterator for Prefix {
     type Item = Event;
 
     fn next(&mut self) -> Option<Self::Item> {
