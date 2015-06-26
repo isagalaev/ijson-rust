@@ -20,14 +20,6 @@ pub struct Items<I> where I: Iterator<Item=Event> {
     events: I,
 }
 
-impl<I> Items<I> where I: Iterator<Item=Event> {
-    pub fn new(events: I) -> Items<I> {
-        Items {
-            events: events,
-        }
-    }
-}
-
 impl<I> Iterator for Items<I> where I: Iterator<Item=Event> {
     type Item = Value;
 
@@ -63,3 +55,13 @@ impl<I> Iterator for Items<I> where I: Iterator<Item=Event> {
         }
     }
 }
+
+pub trait IntoItems {
+    fn items(self) -> Items<Self> where Self: Sized + Iterator<Item=Event> {
+        Items {
+            events: self,
+        }
+    }
+}
+
+impl<T> IntoItems for T {}
