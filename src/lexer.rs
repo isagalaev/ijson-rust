@@ -19,16 +19,16 @@ fn is_lexeme(value: u8) -> bool {
     }
 }
 
-pub struct Lexer {
+pub struct Lexer<T: Read> {
     buf: [u8; BUFSIZE],
     len: usize,
     pos: usize,
-    f: Box<Read>,
+    f: T,
 }
 
-impl Lexer {
+impl<T: Read> Lexer<T> {
 
-    pub fn new(f: Box<Read>) -> Lexer {
+    pub fn new(f: T) -> Lexer<T> {
         Lexer {
             buf: [0; BUFSIZE],
             len: 0,
@@ -50,7 +50,7 @@ impl Lexer {
     }
 }
 
-impl Iterator for Lexer {
+impl<T: Read> Iterator for Lexer<T> {
     type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Vec<u8>> {

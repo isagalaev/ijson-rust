@@ -57,20 +57,20 @@ fn reference_events() -> Vec<Event> {
 
 #[test]
 fn parser() {
-    let f = Box::new(File::open("test.json").unwrap());
+    let f = File::open("test.json").unwrap();
     let events: Vec<Event> = Parser::new(f).collect();
     assert_eq!(events, reference_events());
 }
 
 #[test]
 fn prefixes() {
-    let f = Box::new(File::open("test.json").unwrap());
+    let f = File::open("test.json").unwrap();
     let full: Vec<_> = Parser::new(f).collect();
-    let f = Box::new(File::open("test.json").unwrap());
+    let f = File::open("test.json").unwrap();
     let result: Vec<_> = Parser::new(f).prefix("").collect();
     assert_eq!(result, full);
 
-    let f = Box::new(File::open("test.json").unwrap());
+    let f = File::open("test.json").unwrap();
     let result: Vec<_> = Parser::new(f).prefix("docs.item.meta.item").collect();
     assert_eq!(result, vec![
         Event::StartArray,
@@ -83,7 +83,7 @@ fn prefixes() {
 
 #[test]
 fn items() {
-    let f = Box::new(File::open("test.json").unwrap());
+    let f = File::open("test.json").unwrap();
     let result: Vec<_> = Parser::new(f).items("").collect();
     assert_eq!(result.len(), 1);
     match result[0] {
@@ -91,7 +91,7 @@ fn items() {
         _ => panic!("Map expected"),
     }
 
-    let f = Box::new(File::open("test.json").unwrap());
+    let f = File::open("test.json").unwrap();
     let result: Vec<_> = Parser::new(f).items("docs.item.meta.item").collect();
     assert_eq!(result, vec![
         Value::Array(vec![Value::Number(1f64)]),

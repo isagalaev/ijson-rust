@@ -14,7 +14,7 @@ fn main() {
     if args.len() < 2 {
         panic!("Provide filename")
     }
-    let f = Box::new(File::open(&args[1]).unwrap());
+    let f = File::open(&args[1]).unwrap();
     let p = parser::Parser::new(f);
     let mut count = 0;
 

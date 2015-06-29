@@ -70,15 +70,15 @@ fn unescape(lexeme: &[u8]) -> String {
     result
 }
 
-pub struct Parser {
-    lexer: Peekable<lexer::Lexer>,
+pub struct Parser<T: Read> {
+    lexer: Peekable<lexer::Lexer<T>>,
     stack: Vec<u8>,
     state: State,
 }
 
-impl Parser {
+impl<T: Read> Parser<T> {
 
-    pub fn new(f: Box<Read>) -> Parser {
+    pub fn new(f: T) -> Parser<T> {
         Parser {
             lexer: lexer::Lexer::new(f).peekable(),
             stack: vec![],
@@ -126,7 +126,7 @@ impl Parser {
 
 }
 
-impl Iterator for Parser {
+impl<T: Read> Iterator for Parser<T> {
     type Item = Event;
 
     fn next(&mut self) -> Option<Event> {
