@@ -107,9 +107,9 @@ pub trait Builder where Self: Sized + Iterator<Item=Event> {
         }
     }
 
-    fn items(self) -> Items<Self> {
+    fn items(self, prefix: &str) -> Items<Prefix<Self>> {
         Items {
-            events: self,
+            events: self.prefix(prefix),
         }
     }
 }
