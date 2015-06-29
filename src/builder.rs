@@ -97,9 +97,9 @@ impl<E> Iterator for Items<E> where E: Iterator<Item=Event> {
     }
 }
 
-pub trait Builder {
+pub trait Builder where Self: Sized + Iterator<Item=Event> {
 
-    fn prefix(self, prefix: &str) -> Prefix<Self> where Self: Sized + Iterator<Item=Event> {
+    fn prefix(self, prefix: &str) -> Prefix<Self>  {
         Prefix {
             reference: prefix.split(".").map(|s| s.to_string()).collect(),
             path: vec![],
@@ -107,11 +107,11 @@ pub trait Builder {
         }
     }
 
-    fn items(self) -> Items<Self> where Self: Sized + Iterator<Item=Event> {
+    fn items(self) -> Items<Self> {
         Items {
             events: self,
         }
     }
 }
 
-impl<T> Builder for T {}
+impl<T> Builder for T where T: Sized + Iterator<Item=Event> {}
