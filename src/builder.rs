@@ -101,7 +101,7 @@ pub trait Builder where Self: Sized + Iterator<Item=Event> {
 
     fn prefix(self, prefix: &str) -> Prefix<Self>  {
         Prefix {
-            reference: prefix.split(".").map(|s| s.to_string()).collect(),
+            reference: prefix.split_terminator(".").map(str::to_string).collect(),
             path: vec![],
             parser: self,
         }

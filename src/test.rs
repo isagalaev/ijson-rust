@@ -65,8 +65,10 @@ fn parser() {
 #[test]
 fn prefixes() {
     let f = Box::new(File::open("test.json").unwrap());
-    let result: Vec<_> = Parser::new(f).prefix("docs.item.null").collect();
-    assert_eq!(result, vec![Event::Null]);
+    let full: Vec<_> = Parser::new(f).collect();
+    let f = Box::new(File::open("test.json").unwrap());
+    let result: Vec<_> = Parser::new(f).prefix("").collect();
+    assert_eq!(result, full);
 
     let f = Box::new(File::open("test.json").unwrap());
     let result: Vec<_> = Parser::new(f).prefix("docs.item.meta.item").collect();
