@@ -1,8 +1,7 @@
 use std::fs::File;
-use std::collections::HashMap;
 
 use super::parser::{Parser, Event};
-use super::builder::{Builder, Value};
+use super::builder::{Builder, decode};
 
 
 fn reference_events() -> Vec<Event> {
@@ -83,18 +82,24 @@ fn prefixes() {
 
 #[test]
 fn items() {
+
+
     let f = File::open("test.json").unwrap();
     let result: Vec<_> = Parser::new(f).items("").collect();
     assert_eq!(result.len(), 1);
-    match result[0] {
-        Value::Map(_) => (),
-        _ => panic!("Map expected"),
+
+    #[derive(RustcDecodable, Debug, PartialEq)]
+    struct Person {
+        name: String,
+        friends: Vec<String>,
     }
 
-    let f = File::open("test.json").unwrap();
-    let result: Vec<_> = Parser::new(f).items("docs.item.meta.item").collect();
-    assert_eq!(result, vec![
-        Value::Array(vec![Value::Number(1f64)]),
-        Value::Map(HashMap::new()),
-    ]);
+    let f = File::open("people.json").unwrap();
+    let json = Parser::new(f).items("item").next().unwrap();
+    let result: Person = decode(json).unwrap();
+    let reference = Person {
+        name: "John".to_string(),
+        friends: vec!["Mary".to_string(), "Michael".to_string()],
+    };
+    assert_eq!(result, reference);
 }

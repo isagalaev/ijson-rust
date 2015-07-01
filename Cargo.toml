@@ -6,3 +6,4 @@ authors = ["Ivan Sagalaev <maniac@softwaremaniacs.org>"]
 
 [dependencies]
 time = "*"
+rustc-serialize = "*"

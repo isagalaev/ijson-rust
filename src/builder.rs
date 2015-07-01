@@ -1,4 +1,8 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
+
+use rustc_serialize::json;
+use rustc_serialize::json::Json;
+use rustc_serialize::Decodable;
 
 use super::parser::Event;
 
@@ -44,25 +48,12 @@ impl<E> Iterator for Prefix<E> where E: Iterator<Item=Event> {
     }
 }
 
-#[derive(Debug)]
-#[derive(PartialEq)]
-pub enum Value {
-    Null,
-    Boolean(bool),
-    String(String),
-    Number(f64),
-    Map(self::Map),
-    Array(self::Array),
-}
-pub type Map = HashMap<String, Value>;
-pub type Array = Vec<Value>;
-
 pub struct Items<E> where E: Iterator<Item=Event> {
     events: E,
 }
 
 impl<E> Iterator for Items<E> where E: Iterator<Item=Event> {
-    type Item = Value;
+    type Item = Json;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.events.next() {
@@ -70,7 +61,7 @@ impl<E> Iterator for Items<E> where E: Iterator<Item=Event> {
             Some(event) => match event {
                 Event::EndMap | Event::EndArray => None,
                 Event::StartMap => {
-                    let mut result = HashMap::new();
+                    let mut result = BTreeMap::new();
                     while let Some(event) = self.events.next() {
                         match event {
                             Event::EndMap => break,
@@ -78,19 +69,19 @@ impl<E> Iterator for Items<E> where E: Iterator<Item=Event> {
                             _ => unreachable!(),
                         }
                     }
-                    Some(Value::Map(result))
+                    Some(Json::Object(result))
                 }
                 Event::StartArray => {
                     let mut result = vec![];
                     while let Some(value) = self.next() {
                         result.push(value);
                     }
-                    Some(Value::Array(result))
+                    Some(Json::Array(result))
                 }
-                Event::Null => Some(Value::Null),
-                Event::Boolean(v) => Some(Value::Boolean(v)),
-                Event::String(v) => Some(Value::String(v)),
-                Event::Number(v) => Some(Value::Number(v)),
+                Event::Null => Some(Json::Null),
+                Event::Boolean(v) => Some(Json::Boolean(v)),
+                Event::String(v) => Some(Json::String(v)),
+                Event::Number(v) => Some(Json::F64(v)),
                 Event::Key(k) => panic!("Unexpected Key event: {}", k),
             }
         }
@@ -115,3 +106,8 @@ pub trait Builder where Self: Sized + Iterator<Item=Event> {
 }
 
 impl<T> Builder for T where T: Sized + Iterator<Item=Event> {}
+
+pub fn decode<T: Decodable>(json: Json) -> Result<T, json::DecoderError> {
+    let mut decoder = json::Decoder::new(json);
+    Decodable::decode(&mut decoder)
+}
