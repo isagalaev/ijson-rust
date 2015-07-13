@@ -5,5 +5,4 @@ version = "0.0.1"
 authors = ["Ivan Sagalaev <maniac@softwaremaniacs.org>"]
 
 [dependencies]
-time = "*"
 rustc-serialize = "*"
