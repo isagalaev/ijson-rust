@@ -1,6 +1,6 @@
 [package]
 
-name = "ijson_rust"
+name = "ijson"
 version = "0.0.1"
 authors = ["Ivan Sagalaev <maniac@softwaremaniacs.org>"]
 
