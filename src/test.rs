@@ -1,7 +1,7 @@
 use std::fs::File;
 
-use super::parser::{Parser, Event};
-use super::builder::{Builder, decode};
+use ::parser::{Parser, Event};
+use ::builder::{Builder, decode};
 
 
 fn reference_events() -> Vec<Event> {

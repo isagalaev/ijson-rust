@@ -4,7 +4,7 @@ use rustc_serialize::json;
 use rustc_serialize::json::Json;
 use rustc_serialize::Decodable;
 
-use super::parser::Event;
+use ::parser::Event;
 
 
 pub struct Prefix<E> where E: Iterator<Item=Event> {

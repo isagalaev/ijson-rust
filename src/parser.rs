@@ -3,7 +3,7 @@ use std::iter::Peekable;
 use std::str;
 use std::char;
 
-use super::lexer;
+use ::lexer;
 
 
 #[derive(Debug)]
