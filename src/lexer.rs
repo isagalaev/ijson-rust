@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::io;
 
 
 const BUFSIZE: usize = 64 * 1024;
@@ -19,14 +19,20 @@ fn is_lexeme(value: u8) -> bool {
     }
 }
 
-pub struct Lexer<T: Read> {
+pub enum Lexeme {
+    Lexeme(Vec<u8>),
+    Unterminated,
+    IOError(io::Error),
+}
+
+pub struct Lexer<T: io::Read> {
     buf: [u8; BUFSIZE],
     len: usize,
     pos: usize,
     f: T,
 }
 
-impl<T: Read> Lexer<T> {
+impl<T: io::Read> Lexer<T> {
 
     pub fn new(f: T) -> Lexer<T> {
         Lexer {
@@ -37,28 +43,29 @@ impl<T: Read> Lexer<T> {
         }
     }
 
-    fn ensure_buffer(&mut self) -> bool {
+    fn ensure_buffer(&mut self) -> io::Result<bool> {
         if self.pos < self.len {
-            true
+            Ok(true)
         } else {
-            match self.f.read(&mut self.buf) {
-                Err(error) => panic!("Error reading stream: {}", error),
-                Ok(size) => { self.len = size; self.pos = 0; },
-            };
-            self.len > 0
+            self.f.read(&mut self.buf).and_then(|size| {
+                self.len = size;
+                self.pos = 0;
+                Ok(size > 0)
+            })
         }
     }
 }
 
-impl<T: Read> Iterator for Lexer<T> {
-    type Item = Vec<u8>;
+impl<T: io::Read> Iterator for Lexer<T> {
+    type Item = Lexeme;
 
-    fn next(&mut self) -> Option<Vec<u8>> {
-        while self.ensure_buffer() && is_whitespace(self.buf[self.pos]) {
+    fn next(&mut self) -> Option<Self::Item> {
+        while match self.ensure_buffer() {
+            Err(e) => return Some(Lexeme::IOError(e)),
+            Ok(false) => return None,
+            Ok(true) => is_whitespace(self.buf[self.pos]),
+        } {
             self.pos += 1;
-        }
-        if self.len == 0 {
-            return None;
         }
 
         let mut result = vec![];
@@ -76,8 +83,11 @@ impl<T: Read> Iterator for Lexer<T> {
                 if self.pos < self.len {
                     self.pos += 1;
                     break;
-                } else if !self.ensure_buffer() {
-                    panic!("Unterminated string");
+                }
+                match self.ensure_buffer() {
+                    Err(e) => return Some(Lexeme::IOError(e)),
+                    Ok(false) => return Some(Lexeme::Unterminated),
+                    _ => (),
                 }
             }
             result.push(b'"');
@@ -91,11 +101,16 @@ impl<T: Read> Iterator for Lexer<T> {
                     self.pos += 1;
                 }
                 result.extend(self.buf[start..self.pos].iter().cloned());
-                if self.pos < self.len || !self.ensure_buffer() {
+                if self.pos < self.len {
                     break;
+                }
+                match self.ensure_buffer() {
+                    Err(e) => return Some(Lexeme::IOError(e)),
+                    Ok(false) => break,
+                    _ => (),
                 }
             }
         }
-        Some(result)
+        Some(Lexeme::Lexeme(result))
     }
 }

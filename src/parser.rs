@@ -87,13 +87,20 @@ impl<T: Read> Parser<T> {
     }
 
     fn consume_lexeme(&mut self) -> Vec<u8> {
-        self.lexer.next().expect("More lexemes expected")
+        match self.lexer.next() {
+            None => panic!("More lexemes expected"),
+            Some(lexer::Lexeme::Lexeme(v)) => v,
+            _ => panic!("Unknown Lexeme kind"),
+        }
     }
 
     fn check_lexeme(&mut self, lexemes: &[&[u8]]) -> bool {
         match self.lexer.peek() {
             None => false,
-            Some(next) => lexemes.iter().any(|l| *l == &next[..]),
+            Some(&lexer::Lexeme::Lexeme(ref next)) => {
+                lexemes.iter().any(|l| *l == &next[..])
+            }
+            _ => panic!("Unknown Lexeme kind"),
         }
     }
 
