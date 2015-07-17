@@ -25,6 +25,12 @@ pub enum Lexeme {
     IOError(io::Error),
 }
 
+enum Buffer {
+    Within,
+    Reset,
+    Empty,
+}
+
 pub struct Lexer<T: io::Read> {
     buf: [u8; BUFSIZE],
     len: usize,
@@ -43,14 +49,14 @@ impl<T: io::Read> Lexer<T> {
         }
     }
 
-    fn ensure_buffer(&mut self) -> io::Result<bool> {
+    fn ensure_buffer(&mut self) -> io::Result<Buffer> {
         if self.pos < self.len {
-            Ok(true)
+            Ok(Buffer::Within)
         } else {
             self.f.read(&mut self.buf).and_then(|size| {
                 self.len = size;
                 self.pos = 0;
-                Ok(size > 0)
+                Ok(if size > 0 { Buffer::Reset } else { Buffer::Empty })
             })
         }
     }
@@ -62,8 +68,8 @@ impl<T: io::Read> Iterator for Lexer<T> {
     fn next(&mut self) -> Option<Self::Item> {
         while match self.ensure_buffer() {
             Err(e) => return Some(Lexeme::IOError(e)),
-            Ok(false) => return None,
-            Ok(true) => is_whitespace(self.buf[self.pos]),
+            Ok(Buffer::Empty) => return None,
+            _ => is_whitespace(self.buf[self.pos]),
         } {
             self.pos += 1;
         }
@@ -80,14 +86,11 @@ impl<T: io::Read> Iterator for Lexer<T> {
                     self.pos += 1;
                 }
                 result.extend(self.buf[start..self.pos].iter().cloned());
-                if self.pos < self.len {
-                    self.pos += 1;
-                    break;
-                }
                 match self.ensure_buffer() {
                     Err(e) => return Some(Lexeme::IOError(e)),
-                    Ok(false) => return Some(Lexeme::Unterminated),
-                    _ => (),
+                    Ok(Buffer::Empty) => return Some(Lexeme::Unterminated),
+                    Ok(Buffer::Within) => { self.pos += 1; break }
+                    Ok(Buffer::Reset) => (), // continue
                 }
             }
             result.push(b'"');
@@ -101,13 +104,10 @@ impl<T: io::Read> Iterator for Lexer<T> {
                     self.pos += 1;
                 }
                 result.extend(self.buf[start..self.pos].iter().cloned());
-                if self.pos < self.len {
-                    break;
-                }
                 match self.ensure_buffer() {
                     Err(e) => return Some(Lexeme::IOError(e)),
-                    Ok(false) => break,
-                    _ => (),
+                    Ok(Buffer::Reset) => (), // continue
+                    _ => break,
                 }
             }
         }
