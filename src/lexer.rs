@@ -89,10 +89,11 @@ impl<T: io::Read> Iterator for Lexer<T> {
                 match self.ensure_buffer() {
                     Err(e) => return Some(Lexeme::IOError(e)),
                     Ok(Buffer::Empty) => return Some(Lexeme::Unterminated),
-                    Ok(Buffer::Within) => { self.pos += 1; break }
+                    Ok(Buffer::Within) => break,
                     Ok(Buffer::Reset) => (), // continue
                 }
             }
+            self.pos += 1;
             result.push(b'"');
         } else if !is_lexeme(self.buf[self.pos]) {
             result.push(self.buf[self.pos]);
