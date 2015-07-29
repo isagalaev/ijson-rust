@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, fmt, error};
 
 
 const BUFSIZE: usize = 64 * 1024;
@@ -19,10 +19,35 @@ fn is_lexeme(value: u8) -> bool {
     }
 }
 
-pub enum Lexeme {
-    Lexeme(Vec<u8>),
+#[derive(Debug)]
+pub enum Error {
     Unterminated,
-    IOError(io::Error),
+    IO(io::Error),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match *self {
+            Error::Unterminated => write!(f, "{}", self),
+            Error::IO(_) => write!(f, "I/O Error: {}", self)
+        }
+    }
+}
+
+impl error::Error for Error {
+    fn description(&self) -> &str {
+        match *self {
+            Error::Unterminated => "Unterminated string lexeme",
+            Error::IO(ref e) => e.description(),
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        match *self {
+            Error::Unterminated => None,
+            Error::IO(ref e) => Some(e),
+        }
+    }
 }
 
 enum Buffer {
@@ -63,11 +88,11 @@ impl<T: io::Read> Lexer<T> {
 }
 
 impl<T: io::Read> Iterator for Lexer<T> {
-    type Item = Lexeme;
+    type Item = Result<Vec<u8>, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         while match self.ensure_buffer() {
-            Err(e) => return Some(Lexeme::IOError(e)),
+            Err(e) => return Some(Err(Error::IO(e))),
             Ok(Buffer::Empty) => return None,
             _ => is_whitespace(self.buf[self.pos]),
         } {
@@ -87,8 +112,8 @@ impl<T: io::Read> Iterator for Lexer<T> {
                 }
                 result.extend(self.buf[start..self.pos].iter().cloned());
                 match self.ensure_buffer() {
-                    Err(e) => return Some(Lexeme::IOError(e)),
-                    Ok(Buffer::Empty) => return Some(Lexeme::Unterminated),
+                    Err(e) => return Some(Err(Error::IO(e))),
+                    Ok(Buffer::Empty) => return Some(Err(Error::Unterminated)),
                     Ok(Buffer::Within) => break,
                     Ok(Buffer::Reset) => (), // continue
                 }
@@ -106,12 +131,12 @@ impl<T: io::Read> Iterator for Lexer<T> {
                 }
                 result.extend(self.buf[start..self.pos].iter().cloned());
                 match self.ensure_buffer() {
-                    Err(e) => return Some(Lexeme::IOError(e)),
+                    Err(e) => return Some(Err(Error::IO(e))),
                     Ok(Buffer::Reset) => (), // continue
                     _ => break,
                 }
             }
         }
-        Some(Lexeme::Lexeme(result))
+        Some(Ok(result))
     }
 }
