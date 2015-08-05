@@ -50,6 +50,15 @@ impl error::Error for Error {
     }
 }
 
+macro_rules! itry {
+    ($x: expr) => {
+        match $x {
+            Err(e) => return Some(Err(Error::IO(e))),
+            Ok(v) => v,
+        }
+    }
+}
+
 enum Buffer {
     Within,
     Reset,
@@ -91,9 +100,8 @@ impl<T: io::Read> Iterator for Lexer<T> {
     type Item = Result<Vec<u8>, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while match self.ensure_buffer() {
-            Err(e) => return Some(Err(Error::IO(e))),
-            Ok(Buffer::Empty) => return None,
+        while match itry!(self.ensure_buffer()) {
+            Buffer::Empty => return None,
             _ => is_whitespace(self.buf[self.pos]),
         } {
             self.pos += 1;
@@ -111,11 +119,10 @@ impl<T: io::Read> Iterator for Lexer<T> {
                     self.pos += 1;
                 }
                 result.extend(self.buf[start..self.pos].iter().cloned());
-                match self.ensure_buffer() {
-                    Err(e) => return Some(Err(Error::IO(e))),
-                    Ok(Buffer::Empty) => return Some(Err(Error::Unterminated)),
-                    Ok(Buffer::Within) => break,
-                    Ok(Buffer::Reset) => (), // continue
+                match itry!(self.ensure_buffer()) {
+                    Buffer::Empty => return Some(Err(Error::Unterminated)),
+                    Buffer::Within => break,
+                    Buffer::Reset => (), // continue
                 }
             }
             self.pos += 1;
@@ -130,9 +137,8 @@ impl<T: io::Read> Iterator for Lexer<T> {
                     self.pos += 1;
                 }
                 result.extend(self.buf[start..self.pos].iter().cloned());
-                match self.ensure_buffer() {
-                    Err(e) => return Some(Err(Error::IO(e))),
-                    Ok(Buffer::Reset) => (), // continue
+                match itry!(self.ensure_buffer()) {
+                    Buffer::Reset => (), // continue
                     _ => break,
                 }
             }
