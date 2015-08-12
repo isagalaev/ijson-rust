@@ -1,23 +1,37 @@
 use std::collections::BTreeMap;
+use std::result;
 
 use rustc_serialize::json;
 use rustc_serialize::json::Json;
 use rustc_serialize::Decodable;
 
-use ::parser::Event;
+use ::parser::{Event, Result};
 
 
-pub struct Prefix<E> where E: Iterator<Item=Event> {
+macro_rules! itry {
+    ($x: expr) => {
+        match $x {
+            Err(e) => return Some(Err(From::from(e))),
+            Ok(v) => v,
+        }
+    }
+}
+
+pub trait EventIterator: Iterator<Item=Result<Event>> {}
+impl<T: Iterator<Item=Result<Event>>> EventIterator for T {}
+
+pub struct Prefix<E: EventIterator> {
     reference: Vec<String>,
     path: Vec<String>,
     parser: E,
 }
 
-impl<E> Iterator for Prefix<E> where E: Iterator<Item=Event> {
-    type Item = Event;
+impl<E: EventIterator> Iterator for Prefix<E> {
+    type Item = Result<Event>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some(event) = self.parser.next() {
+        while let Some(r) = self.parser.next() {
+            let event = itry!(r);
             match &event {
                 &Event::Key(_) | &Event::EndMap | &Event::EndArray => {
                     self.path.pop();
@@ -41,54 +55,57 @@ impl<E> Iterator for Prefix<E> where E: Iterator<Item=Event> {
             }
 
             if found {
-                return Some(event)
+                return Some(Ok(event))
             }
         }
         None
     }
 }
 
-pub struct Items<E> where E: Iterator<Item=Event> {
+pub struct Items<E> where E: EventIterator {
     events: E,
 }
 
-impl<E> Iterator for Items<E> where E: Iterator<Item=Event> {
-    type Item = Json;
+impl<E> Iterator for Items<E> where E: EventIterator {
+    type Item = Result<Json>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.events.next() {
             None => None,
-            Some(event) => match event {
+            Some(result) => match itry!(result) {
                 Event::EndMap | Event::EndArray => None,
                 Event::StartMap => {
-                    let mut result = BTreeMap::new();
-                    while let Some(event) = self.events.next() {
-                        match event {
+                    let mut object = BTreeMap::new();
+                    while let Some(result) = self.events.next() {
+                        match itry!(result) {
                             Event::EndMap => break,
-                            Event::Key(k) => {result.insert(k, self.next().unwrap());}
+                            Event::Key(k) => {
+                                let result = self.next().expect("Expected more events after a Key event");
+                                object.insert(k, itry!(result));
+                            }
                             _ => unreachable!(),
                         }
                     }
-                    Some(Json::Object(result))
+                    Some(Ok(Json::Object(object)))
                 }
                 Event::StartArray => {
-                    let mut result = vec![];
-                    while let Some(value) = self.next() {
-                        result.push(value);
+                    let mut array = vec![];
+                    while let Some(result) = self.next() {
+                        array.push(itry!(result));
                     }
-                    Some(Json::Array(result))
+                    Some(Ok(Json::Array(array)))
                 }
-                Event::Null => Some(Json::Null),
-                Event::Boolean(v) => Some(Json::Boolean(v)),
-                Event::String(v) => Some(Json::String(v)),
-                Event::Number(v) => Some(Json::F64(v)),
+                Event::Null => Some(Ok(Json::Null)),
+                Event::Boolean(v) => Some(Ok(Json::Boolean(v))),
+                Event::String(v) => Some(Ok(Json::String(v))),
+                Event::Number(v) => Some(Ok(Json::F64(v))),
                 Event::Key(k) => panic!("Unexpected Key event: {}", k),
             }
         }
     }
 }
 
-pub trait Builder where Self: Sized + Iterator<Item=Event> {
+pub trait Builder where Self: Sized + EventIterator {
 
     fn prefix(self, prefix: &str) -> Prefix<Self>  {
         Prefix {
@@ -105,9 +122,9 @@ pub trait Builder where Self: Sized + Iterator<Item=Event> {
     }
 }
 
-impl<T> Builder for T where T: Sized + Iterator<Item=Event> {}
+impl<T> Builder for T where T: Sized + EventIterator {}
 
-pub fn decode<T: Decodable>(json: Json) -> Result<T, json::DecoderError> {
+pub fn decode<T: Decodable>(json: Json) -> result::Result<T, json::DecoderError> {
     let mut decoder = json::Decoder::new(json);
     Decodable::decode(&mut decoder)
 }

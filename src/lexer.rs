@@ -37,7 +37,7 @@ impl fmt::Display for Error {
 impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
-            Error::Unterminated => "Unterminated string lexeme",
+            Error::Unterminated => "unterminated string",
             Error::IO(ref e) => e.description(),
         }
     }

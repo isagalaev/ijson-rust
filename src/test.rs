@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::result::Result;
 
 use ::parser::{Parser, Event};
 use ::builder::{Builder, decode};
@@ -57,20 +58,20 @@ fn reference_events() -> Vec<Event> {
 #[test]
 fn parser() {
     let f = File::open("test.json").unwrap();
-    let events: Vec<Event> = Parser::new(f).collect();
+    let events: Vec<_> = Parser::new(f).map(Result::unwrap).collect();
     assert_eq!(events, reference_events());
 }
 
 #[test]
 fn prefixes() {
     let f = File::open("test.json").unwrap();
-    let full: Vec<_> = Parser::new(f).collect();
+    let full: Vec<_> = Parser::new(f).map(Result::unwrap).collect();
     let f = File::open("test.json").unwrap();
-    let result: Vec<_> = Parser::new(f).prefix("").collect();
+    let result: Vec<_> = Parser::new(f).prefix("").map(Result::unwrap).collect();
     assert_eq!(result, full);
 
     let f = File::open("test.json").unwrap();
-    let result: Vec<_> = Parser::new(f).prefix("docs.item.meta.item").collect();
+    let result: Vec<_> = Parser::new(f).prefix("docs.item.meta.item").map(Result::unwrap).collect();
     assert_eq!(result, vec![
         Event::StartArray,
         Event::Number(1f64),
@@ -85,7 +86,7 @@ fn items() {
 
 
     let f = File::open("test.json").unwrap();
-    let result: Vec<_> = Parser::new(f).items("").collect();
+    let result: Vec<_> = Parser::new(f).items("").map(Result::unwrap).collect();
     assert_eq!(result.len(), 1);
 
     #[derive(RustcDecodable, Debug, PartialEq)]
@@ -95,7 +96,7 @@ fn items() {
     }
 
     let f = File::open("people.json").unwrap();
-    let json = Parser::new(f).items("item").next().unwrap();
+    let json = Parser::new(f).items("item").next().unwrap().unwrap();
     let result: Person = decode(json).unwrap();
     let reference = Person {
         name: "John".to_string(),

@@ -1,7 +1,6 @@
 use std::io::Read;
 use std::iter::Peekable;
-use std::str;
-use std::char;
+use std::{str, char, error, fmt, result};
 
 use ::lexer;
 
@@ -21,6 +20,66 @@ pub enum Event {
 }
 
 #[derive(Debug)]
+pub enum Error {
+    Unexpected(String),
+    Utf8(str::Utf8Error),
+    Escape(String),
+    Lexer(lexer::Error),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
+        match *self {
+            Error::Unexpected(ref s) => write!(f, "Unexpected lexeme: '{}'", s),
+            Error::Utf8(ref e) => write!(f, "UTF8 Error: {}", e),
+            Error::Escape(ref s) => write!(f, "Malformed escape: '{}'", s),
+            Error::Lexer(ref e) => write!(f, "Lexer error: {}", e),
+        }
+    }
+}
+
+impl error::Error for Error {
+    fn description(&self) -> &str {
+        match *self {
+            Error::Unexpected(..) => "unexpected lexeme",
+            Error::Utf8(ref e) => e.description(),
+            Error::Escape(..) => "malformed escape",
+            Error::Lexer(ref e) => e.description(),
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        match *self {
+            Error::Lexer(ref e) => Some(e),
+            Error::Utf8(ref e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<str::Utf8Error> for Error {
+    fn from(e: str::Utf8Error) -> Self {
+        Error::Utf8(e)
+    }
+}
+
+pub type Result<T> = result::Result<T, Error>;
+
+macro_rules! itry {
+    ($x: expr) => {
+        match $x {
+            Err(e) => return Some(Err(From::from(e))),
+            Ok(v) => v,
+        }
+    }
+}
+
+#[inline]
+fn unexpected(lexeme: Vec<u8>) -> Option<Result<Event>> {
+    Some(Err(Error::Unexpected(str::from_utf8(&lexeme[..]).unwrap().to_string())))
+}
+
+#[derive(Debug)]
 enum State {
     Closed,
     Event(bool),
@@ -34,7 +93,19 @@ fn trim(lexeme: &[u8]) -> &[u8] {
     &lexeme[1..lexeme.len() - 1]
 }
 
-fn unescape(lexeme: &[u8]) -> String {
+#[inline]
+fn hexdecode(s: &[u8]) -> Option<char> {
+    let mut value = 0;
+    for c in s.iter() {
+        match (*c as char).to_digit(16) {
+            None => return None,
+            Some(d) => value = value * 16 + d,
+        }
+    }
+    char::from_u32(value)
+}
+
+fn unescape(lexeme: &[u8]) -> Result<String> {
     let len = lexeme.len();
     let mut result = String::with_capacity(lexeme.len());
 
@@ -44,17 +115,20 @@ fn unescape(lexeme: &[u8]) -> String {
         while pos < len && lexeme[pos] != b'\\' {
             pos += 1;
         }
-        result.push_str(str::from_utf8(&lexeme[start..pos]).unwrap());
+        result.push_str(try!(str::from_utf8(&lexeme[start..pos])));
         if pos < len {
             pos += 1; // safe to do as the lexer makes sure there's at lease one character after \
             result.push(match lexeme[pos] {
                 b'u' => {
                     if pos + 4 >= len {
-                        panic!("Malformed escape")
+                        return Err(Error::Escape(str::from_utf8(&lexeme[pos..]).unwrap().to_string()))
                     }
-                    let value = lexeme[pos+1..pos+5].iter().fold(0, |acc, &c| acc * 16 + (c as char).to_digit(16).unwrap());
+                    let s = &lexeme[pos+1..pos+5];
                     pos += 4;
-                    char::from_u32(value).unwrap()
+                    match hexdecode(s) {
+                        None => return Err(Error::Escape(str::from_utf8(s).unwrap().to_string())),
+                        Some(ch) => ch,
+                    }
                 }
                 b'b' => '\x08',
                 b'f' => '\x0c',
@@ -62,12 +136,12 @@ fn unescape(lexeme: &[u8]) -> String {
                 b'r' => '\r',
                 b't' => '\t',
                 b @ b'"' | b @ b'\\' => b as char,
-                _ => panic!("Malformed escape"),
+                c => return Err(Error::Escape(str::from_utf8(&[c]).unwrap().to_string())),
             });
             pos += 1;
         }
     }
-    result
+    Ok(result)
 }
 
 pub struct Parser<T: Read> {
@@ -104,8 +178,8 @@ impl<T: Read> Parser<T> {
         }
     }
 
-    fn process_event(&self, lexeme: &[u8]) -> Event {
-        match lexeme {
+    fn process_event(&self, lexeme: &[u8]) -> Result<Event> {
+        Ok(match lexeme {
             b"null" => Event::Null,
             b"true" => Event::Boolean(true),
             b"false" => Event::Boolean(false),
@@ -113,13 +187,12 @@ impl<T: Read> Parser<T> {
             b"{" => Event::StartMap,
             b"]" => Event::EndArray,
             b"}" => Event::EndMap,
-            _ if lexeme[0] == b'"' => Event::String(unescape(trim(lexeme))),
-            _ => Event::Number(
-                str::from_utf8(lexeme).unwrap()
-                .parse().ok()
-                .expect(&format!("Unexpected lexeme {:?}", lexeme))
-            )
-        }
+            _ if lexeme[0] == b'"' => Event::String(try!(unescape(trim(lexeme)))),
+            _ => {
+                let s = try!(str::from_utf8(lexeme));
+                Event::Number(try!(s.parse().map_err(|_| Error::Unexpected(str::from_utf8(lexeme).unwrap().to_string()))))
+            }
+        })
     }
 
     #[inline]
@@ -134,9 +207,9 @@ impl<T: Read> Parser<T> {
 }
 
 impl<T: Read> Iterator for Parser<T> {
-    type Item = Event;
+    type Item = Result<Event>;
 
-    fn next(&mut self) -> Option<Event> {
+    fn next(&mut self) -> Option<Self::Item> {
         loop {
             match self.state {
                 State::Closed => {
@@ -149,7 +222,7 @@ impl<T: Read> Iterator for Parser<T> {
                     let lexeme = self.consume_lexeme();
 
                     match &lexeme[..] {
-                        b"]" | b"}" if !can_close => panic!("Unexpected lexeme"),
+                        b"]" | b"}" if !can_close => return unexpected(lexeme),
                         b"[" | b"{" => self.stack.push(lexeme[0]),
                         b"]" | b"}" => self.assert_top_eq(lexeme[0]),
                         _ => ()
@@ -170,21 +243,23 @@ impl<T: Read> Iterator for Parser<T> {
                 State::Key(can_close) => {
                     if self.check_lexeme(&[b"}"]) {
                         if !can_close {
-                            panic!("Unexpected lexeme")
+                            return unexpected(vec![b'}'])
                         }
                         self.state = State::Event(true);
                         continue;
                     }
                     let lexeme = self.consume_lexeme();
                     if lexeme[0] != b'"' {
-                        panic!("Unexpected lexeme")
+                        return unexpected(lexeme)
                     }
                     self.state = State::Colon;
-                    return Some(Event::Key(str::from_utf8(trim(&lexeme)).unwrap().to_string()));
+                    let s = itry!(str::from_utf8(trim(&lexeme)));
+                    return Some(Ok(Event::Key(s.to_string())))
                 }
                 State::Colon => {
-                    if self.consume_lexeme() != b":" {
-                        panic!("Unexpected lexeme")
+                    let lexeme = self.consume_lexeme();
+                    if lexeme != b":" {
+                        return unexpected(lexeme)
                     }
                     self.state = State::Event(false);
                 }
@@ -193,8 +268,9 @@ impl<T: Read> Iterator for Parser<T> {
                         self.state = State::Event(true);
                         continue;
                     }
-                    if self.consume_lexeme() != b"," {
-                        panic!("Unexpected lexeme");
+                    let lexeme = self.consume_lexeme();
+                    if lexeme != b"," {
+                        return unexpected(lexeme)
                     }
                     self.state = if self.stack[self.stack.len() - 1] == b'[' {
                         State::Event(false)
