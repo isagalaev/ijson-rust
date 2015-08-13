@@ -24,6 +24,7 @@ pub enum Error {
     Unexpected(String),
     Utf8(str::Utf8Error),
     Escape(String),
+    MoreLexemes,
     Lexer(lexer::Error),
 }
 
@@ -33,6 +34,7 @@ impl fmt::Display for Error {
             Error::Unexpected(ref s) => write!(f, "Unexpected lexeme: '{}'", s),
             Error::Utf8(ref e) => write!(f, "UTF8 Error: {}", e),
             Error::Escape(ref s) => write!(f, "Malformed escape: '{}'", s),
+            Error::MoreLexemes => write!(f, "More lexemes expected"),
             Error::Lexer(ref e) => write!(f, "Lexer error: {}", e),
         }
     }
@@ -44,6 +46,7 @@ impl error::Error for Error {
             Error::Unexpected(..) => "unexpected lexeme",
             Error::Utf8(ref e) => e.description(),
             Error::Escape(..) => "malformed escape",
+            Error::MoreLexemes => "more lexemes expected",
             Error::Lexer(ref e) => e.description(),
         }
     }
@@ -160,18 +163,17 @@ impl<T: Read> Parser<T> {
         }
     }
 
-    fn consume_lexeme(&mut self) -> Vec<u8> {
+    fn consume_lexeme(&mut self) -> Result<Vec<u8>> {
         match self.lexer.next() {
-            None => panic!("More lexemes expected"),
-            Some(Err(e)) => panic!("Lexer error: {}", e),
-            Some(Ok(v)) => v,
+            None => Err(Error::MoreLexemes),
+            Some(Err(e)) => Err(Error::Lexer(e)),
+            Some(Ok(v)) => Ok(v),
         }
     }
 
     fn check_lexeme(&mut self, lexemes: &[&[u8]]) -> bool {
         match self.lexer.peek() {
-            None => false,
-            Some(&Err(ref e)) => panic!("Lexer error: {}", e),
+            None | Some(&Err(..)) => false,
             Some(&Ok(ref next)) => {
                 lexemes.iter().any(|l| *l == &next[..])
             }
@@ -219,7 +221,7 @@ impl<T: Read> Iterator for Parser<T> {
                     }
                 }
                 State::Event(can_close) => {
-                    let lexeme = self.consume_lexeme();
+                    let lexeme = itry!(self.consume_lexeme());
 
                     match &lexeme[..] {
                         b"]" | b"}" if !can_close => return unexpected(lexeme),
@@ -248,7 +250,7 @@ impl<T: Read> Iterator for Parser<T> {
                         self.state = State::Event(true);
                         continue;
                     }
-                    let lexeme = self.consume_lexeme();
+                    let lexeme = itry!(self.consume_lexeme());
                     if lexeme[0] != b'"' {
                         return unexpected(lexeme)
                     }
@@ -257,7 +259,7 @@ impl<T: Read> Iterator for Parser<T> {
                     return Some(Ok(Event::Key(s.to_string())))
                 }
                 State::Colon => {
-                    let lexeme = self.consume_lexeme();
+                    let lexeme = itry!(self.consume_lexeme());
                     if lexeme != b":" {
                         return unexpected(lexeme)
                     }
@@ -268,7 +270,7 @@ impl<T: Read> Iterator for Parser<T> {
                         self.state = State::Event(true);
                         continue;
                     }
-                    let lexeme = self.consume_lexeme();
+                    let lexeme = itry!(self.consume_lexeme());
                     if lexeme != b"," {
                         return unexpected(lexeme)
                     }
