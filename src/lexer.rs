@@ -50,10 +50,16 @@ impl error::Error for Error {
     }
 }
 
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
+        Error::IO(e)
+    }
+}
+
 macro_rules! itry {
     ($x: expr) => {
         match $x {
-            Err(e) => return Some(Err(Error::IO(e))),
+            Err(e) => return Some(Err(From::from(e))),
             Ok(v) => v,
         }
     }
