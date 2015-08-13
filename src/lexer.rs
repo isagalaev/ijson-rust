@@ -56,15 +56,6 @@ impl From<io::Error> for Error {
     }
 }
 
-macro_rules! itry {
-    ($x: expr) => {
-        match $x {
-            Err(e) => return Some(Err(From::from(e))),
-            Ok(v) => v,
-        }
-    }
-}
-
 enum Buffer {
     Within,
     Reset,

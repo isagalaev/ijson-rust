@@ -68,15 +68,6 @@ impl From<str::Utf8Error> for Error {
 
 pub type Result<T> = result::Result<T, Error>;
 
-macro_rules! itry {
-    ($x: expr) => {
-        match $x {
-            Err(e) => return Some(Err(From::from(e))),
-            Ok(v) => v,
-        }
-    }
-}
-
 #[inline]
 fn unexpected(lexeme: Vec<u8>) -> Option<Result<Event>> {
     Some(Err(Error::Unexpected(str::from_utf8(&lexeme[..]).unwrap().to_string())))

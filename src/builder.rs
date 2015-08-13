@@ -8,15 +8,6 @@ use rustc_serialize::Decodable;
 use ::parser::{Event, Result};
 
 
-macro_rules! itry {
-    ($x: expr) => {
-        match $x {
-            Err(e) => return Some(Err(From::from(e))),
-            Ok(v) => v,
-        }
-    }
-}
-
 pub trait EventIterator: Iterator<Item=Result<Event>> {}
 impl<T: Iterator<Item=Result<Event>>> EventIterator for T {}
 
