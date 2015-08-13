@@ -25,6 +25,7 @@ pub enum Error {
     Utf8(str::Utf8Error),
     Escape(String),
     MoreLexemes,
+    Unmatched(char),
     Lexer(lexer::Error),
 }
 
@@ -35,6 +36,7 @@ impl fmt::Display for Error {
             Error::Utf8(ref e) => write!(f, "UTF8 Error: {}", e),
             Error::Escape(ref s) => write!(f, "Malformed escape: '{}'", s),
             Error::MoreLexemes => write!(f, "More lexemes expected"),
+            Error::Unmatched(ref c) => write!(f, "Unmatched container terminator: {}", c),
             Error::Lexer(ref e) => write!(f, "Lexer error: {}", e),
         }
     }
@@ -47,6 +49,7 @@ impl error::Error for Error {
             Error::Utf8(ref e) => e.description(),
             Error::Escape(..) => "malformed escape",
             Error::MoreLexemes => "more lexemes expected",
+            Error::Unmatched(..) => "unmatched container terminator",
             Error::Lexer(ref e) => e.description(),
         }
     }
@@ -188,15 +191,6 @@ impl<T: Read> Parser<T> {
         })
     }
 
-    #[inline]
-    fn assert_top_eq(&mut self, actual: u8) {
-        let expected = if actual == b']' { b'[' } else { b'{' };
-        match self.stack.pop() {
-            Some(value) if value == expected => (),
-            _ => panic!("Unmatched {}", actual as char)
-        }
-    }
-
 }
 
 impl<T: Read> Iterator for Parser<T> {
@@ -217,7 +211,13 @@ impl<T: Read> Iterator for Parser<T> {
                     match &lexeme[..] {
                         b"]" | b"}" if !can_close => return unexpected(lexeme),
                         b"[" | b"{" => self.stack.push(lexeme[0]),
-                        b"]" | b"}" => self.assert_top_eq(lexeme[0]),
+                        b"]" | b"}" => {
+                            let expected = if lexeme[0] == b']' { b'[' } else { b'{' };
+                            match self.stack.pop() {
+                                Some(value) if value == expected => (),
+                                _ => return Some(Err(Error::Unmatched(lexeme[0] as char))),
+                            }
+                        }
                         _ => ()
                     };
 
