@@ -26,6 +26,7 @@ pub enum Error {
     Escape(String),
     MoreLexemes,
     Unmatched(char),
+    AdditionalData,
     Lexer(lexer::Error),
 }
 
@@ -37,6 +38,7 @@ impl fmt::Display for Error {
             Error::Escape(ref s) => write!(f, "Malformed escape: '{}'", s),
             Error::MoreLexemes => write!(f, "More lexemes expected"),
             Error::Unmatched(ref c) => write!(f, "Unmatched container terminator: {}", c),
+            Error::AdditionalData => write!(f, "Additional data in the source stream after parsed value"),
             Error::Lexer(ref e) => write!(f, "Lexer error: {}", e),
         }
     }
@@ -50,6 +52,7 @@ impl error::Error for Error {
             Error::Escape(..) => "malformed escape",
             Error::MoreLexemes => "more lexemes expected",
             Error::Unmatched(..) => "unmatched container terminator",
+            Error::AdditionalData => "additional data",
             Error::Lexer(ref e) => e.description(),
         }
     }
@@ -200,9 +203,9 @@ impl<T: Read> Iterator for Parser<T> {
         loop {
             match self.state {
                 State::Closed => {
-                    match self.lexer.peek() {
-                        Some(_) => panic!("Additional data"),
-                        None => return None,
+                    return match self.lexer.peek() {
+                        Some(&Err(lexer::Error::IO(..))) | None => None,
+                        Some(..) => Some(Err(Error::AdditionalData)),
                     }
                 }
                 State::Event(can_close) => {
