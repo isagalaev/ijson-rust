@@ -1,7 +1,9 @@
 use std::fs::File;
+use std::io::Cursor;
 use std::result::Result;
 
-use ::parser::{Parser, Event};
+use ::lexer;
+use ::parser::{self, Parser, Event};
 use ::builder::{Builder, decode};
 
 
@@ -83,8 +85,6 @@ fn prefixes() {
 
 #[test]
 fn items() {
-
-
     let f = File::open("test.json").unwrap();
     let result: Vec<_> = Parser::new(f).items("").map(Result::unwrap).collect();
     assert_eq!(result.len(), 1);
@@ -103,4 +103,15 @@ fn items() {
         friends: vec!["Mary".to_string(), "Michael".to_string()],
     };
     assert_eq!(result, reference);
+}
+
+#[test]
+fn unterminated_string() {
+    let s = Cursor::new(br#"{"key": "value"#.to_vec());
+    let r = Parser::new(s).last().unwrap();
+    assert!(r.is_err());
+    match r.err().unwrap() {
+        parser::Error::Lexer(lexer::Error::Unterminated) => (),
+        _ => panic!("Not {}", lexer::Error::Unterminated),
+    }
 }
