@@ -1,6 +1,6 @@
 use std::{io, fmt, error};
 
-use ::iter::ResultIterator;
+use ::errors::ResultIterator;
 
 
 const BUFSIZE: usize = 64 * 1024;

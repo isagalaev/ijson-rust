@@ -3,7 +3,7 @@ use std::iter::Peekable;
 use std::{str, char, error, fmt, result};
 
 use ::lexer;
-use ::iter::ResultIterator;
+use ::errors::ResultIterator;
 
 
 #[derive(Debug)]
