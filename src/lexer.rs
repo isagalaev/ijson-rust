@@ -1,6 +1,6 @@
-use std::{io, fmt, error};
+use std::io;
 
-use ::errors::ResultIterator;
+use ::errors::{Error, ResultIterator};
 
 
 const BUFSIZE: usize = 64 * 1024;
@@ -18,43 +18,6 @@ fn is_lexeme(value: u8) -> bool {
         b'a' ... b'z' | b'0' ... b'9' |
         b'E' |  b'.' | b'+' | b'-' => true,
         _ => false,
-    }
-}
-
-#[derive(Debug)]
-pub enum Error {
-    Unterminated,
-    IO(io::Error),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match *self {
-            Error::Unterminated => write!(f, "{}", self),
-            Error::IO(_) => write!(f, "I/O Error: {}", self)
-        }
-    }
-}
-
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::Unterminated => "unterminated string",
-            Error::IO(ref e) => e.description(),
-        }
-    }
-
-    fn cause(&self) -> Option<&error::Error> {
-        match *self {
-            Error::Unterminated => None,
-            Error::IO(ref e) => Some(e),
-        }
-    }
-}
-
-impl From<io::Error> for Error {
-    fn from(e: io::Error) -> Self {
-        Error::IO(e)
     }
 }
 

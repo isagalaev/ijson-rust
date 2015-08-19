@@ -1,9 +1,9 @@
 use std::io::Read;
 use std::iter::Peekable;
-use std::{str, char, error, fmt, result};
+use std::{str, char, result};
 
 use ::lexer;
-use ::errors::ResultIterator;
+use ::errors::{Error, ResultIterator};
 
 
 #[derive(Debug)]
@@ -18,59 +18,6 @@ pub enum Event {
     EndArray,
     StartMap,
     EndMap,
-}
-
-#[derive(Debug)]
-pub enum Error {
-    Unexpected(String),
-    Utf8(str::Utf8Error),
-    Escape(String),
-    MoreLexemes,
-    Unmatched(char),
-    AdditionalData,
-    Lexer(lexer::Error),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
-        match *self {
-            Error::Unexpected(ref s) => write!(f, "Unexpected lexeme: '{}'", s),
-            Error::Utf8(ref e) => write!(f, "UTF8 Error: {}", e),
-            Error::Escape(ref s) => write!(f, "Malformed escape: '{}'", s),
-            Error::MoreLexemes => write!(f, "More lexemes expected"),
-            Error::Unmatched(ref c) => write!(f, "Unmatched container terminator: {}", c),
-            Error::AdditionalData => write!(f, "Additional data in the source stream after parsed value"),
-            Error::Lexer(ref e) => write!(f, "Lexer error: {}", e),
-        }
-    }
-}
-
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::Unexpected(..) => "unexpected lexeme",
-            Error::Utf8(ref e) => e.description(),
-            Error::Escape(..) => "malformed escape",
-            Error::MoreLexemes => "more lexemes expected",
-            Error::Unmatched(..) => "unmatched container terminator",
-            Error::AdditionalData => "additional data",
-            Error::Lexer(ref e) => e.description(),
-        }
-    }
-
-    fn cause(&self) -> Option<&error::Error> {
-        match *self {
-            Error::Lexer(ref e) => Some(e),
-            Error::Utf8(ref e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
-impl From<str::Utf8Error> for Error {
-    fn from(e: str::Utf8Error) -> Self {
-        Error::Utf8(e)
-    }
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -162,11 +109,7 @@ impl<T: Read> Parser<T> {
     }
 
     fn consume_lexeme(&mut self) -> Result<Vec<u8>> {
-        match self.lexer.next() {
-            None => Err(Error::MoreLexemes),
-            Some(Err(e)) => Err(Error::Lexer(e)),
-            Some(Ok(v)) => Ok(v),
-        }
+        self.lexer.next().unwrap_or(Err(Error::MoreLexemes))
     }
 
     fn check_lexeme(&mut self, lexemes: &[&[u8]]) -> bool {
@@ -205,7 +148,7 @@ impl<T: Read> Iterator for Parser<T> {
             match self.state {
                 State::Closed => {
                     return match self.lexer.peek() {
-                        Some(&Err(lexer::Error::IO(..))) | None => None,
+                        Some(&Err(Error::IO(..))) | None => None,
                         Some(..) => Some(Err(Error::AdditionalData)),
                     }
                 }

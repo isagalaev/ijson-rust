@@ -2,8 +2,8 @@ use std::fs::File;
 use std::io::Cursor;
 use std::result::Result;
 
-use ::lexer;
-use ::parser::{self, Parser, Event};
+use ::errors::Error;
+use ::parser::{Parser, Event};
 use ::builder::{Builder, decode};
 
 
@@ -111,7 +111,7 @@ fn unterminated_string() {
     let r = Parser::new(s).last().unwrap();
     assert!(r.is_err());
     match r.err().unwrap() {
-        parser::Error::Lexer(lexer::Error::Unterminated) => (),
-        _ => panic!("Not {}", lexer::Error::Unterminated),
+        Error::Unterminated => (),
+        _ => panic!("Not {}", Error::Unterminated),
     }
 }
