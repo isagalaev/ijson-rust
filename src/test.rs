@@ -107,12 +107,23 @@ fn items() {
 
 #[test]
 fn unterminated_string() {
-    let s = Cursor::new(br#"{"key": "value"#.to_vec());
-    let r = Parser::new(s).last().unwrap();
+    let data = br#"{"key": "value"#;
+    let r = Parser::new(Cursor::new(data.to_vec())).last().unwrap();
     assert!(r.is_err());
     match r.err().unwrap() {
         Error::Unterminated => (),
         _ => panic!("Not {}", Error::Unterminated),
+    }
+}
+
+#[test]
+fn additional_data() {
+    let data = br#"{"key": "value"} stuff"#;
+    let r = Parser::new(Cursor::new(data.to_vec())).last().unwrap();
+    assert!(r.is_err());
+    match r.err().unwrap() {
+        Error::AdditionalData => (),
+        _ => panic!("Not {}", Error::AdditionalData),
     }
 }
 
