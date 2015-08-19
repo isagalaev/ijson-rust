@@ -5,7 +5,8 @@ use rustc_serialize::json;
 use rustc_serialize::json::Json;
 use rustc_serialize::Decodable;
 
-use ::parser::{Event, Result};
+use ::parser::Event;
+use ::errors::Result;
 
 
 pub trait EventIterator: Iterator<Item=Result<Event>> {}

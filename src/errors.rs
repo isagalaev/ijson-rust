@@ -1,4 +1,4 @@
-use std::{io, str, error, fmt};
+use std::{io, str, error, fmt, result};
 
 
 #[macro_export]
@@ -8,35 +8,6 @@ macro_rules! itry {
             Err(e) => return Some(Err(From::from(e))),
             Ok(v) => v,
         }
-    }
-}
-
-pub struct ResultIterator<I: Iterator> {
-    iterator: I,
-    errored: bool,
-}
-
-impl<I: Iterator> ResultIterator<I> {
-    pub fn new(iterator: I) -> ResultIterator<I> {
-        ResultIterator {
-            iterator: iterator,
-            errored: false,
-        }
-    }
-}
-
-impl<T, E, I: Iterator<Item=Result<T, E>>> Iterator for ResultIterator<I> {
-    type Item = I::Item;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.errored {
-            return None
-        }
-        let value = self.iterator.next();
-        if let Some(Err(..)) = value {
-            self.errored = true
-        }
-        value
     }
 }
 
@@ -53,7 +24,7 @@ pub enum Error {
 }
 
 impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
         match *self {
             Error::Unterminated => write!(f, "{}", self),
             Error::IO(_) => write!(f, "I/O Error: {}", self),
@@ -100,5 +71,36 @@ impl From<io::Error> for Error {
 impl From<str::Utf8Error> for Error {
     fn from(e: str::Utf8Error) -> Self {
         Error::Utf8(e)
+    }
+}
+
+pub type Result<T> = result::Result<T, Error>;
+
+pub struct ResultIterator<I: Iterator> {
+    iterator: I,
+    errored: bool,
+}
+
+impl<I: Iterator> ResultIterator<I> {
+    pub fn new(iterator: I) -> ResultIterator<I> {
+        ResultIterator {
+            iterator: iterator,
+            errored: false,
+        }
+    }
+}
+
+impl<T, I: Iterator<Item=Result<T>>> Iterator for ResultIterator<I> {
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.errored {
+            return None
+        }
+        let value = self.iterator.next();
+        if let Some(Err(..)) = value {
+            self.errored = true
+        }
+        value
     }
 }

@@ -1,9 +1,9 @@
 use std::io::Read;
 use std::iter::Peekable;
-use std::{str, char, result};
+use std::{str, char};
 
 use ::lexer;
-use ::errors::{Error, ResultIterator};
+use ::errors::{Error, Result, ResultIterator};
 
 
 #[derive(Debug)]
@@ -19,8 +19,6 @@ pub enum Event {
     StartMap,
     EndMap,
 }
-
-pub type Result<T> = result::Result<T, Error>;
 
 #[inline]
 fn unexpected(lexeme: Vec<u8>) -> Option<Result<Event>> {
