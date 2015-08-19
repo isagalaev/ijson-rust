@@ -115,3 +115,26 @@ fn unterminated_string() {
         _ => panic!("Not {}", Error::Unterminated),
     }
 }
+
+#[test]
+fn incomplete() {
+    let data: Vec<&'static [u8]> = vec![
+        b"",
+        b"[",
+        b"[1",
+        b"[1,",
+        b"{",
+        br#"{"key""#,
+        br#"{"key":"#,
+        br#"{"key": "value""#,
+        br#"{"key": "value","#,
+    ];
+    for s in data.iter() {
+        let r = Parser::new(Cursor::new(*s)).last().unwrap();
+        assert!(r.is_err());
+        match r.err().unwrap() {
+            Error::MoreLexemes => (),
+            _ => panic!("Not {}", Error::MoreLexemes),
+        }
+    }
+}
