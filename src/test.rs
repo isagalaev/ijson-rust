@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::Cursor;
 use std::result::Result;
+use std::error::Error as _Error;
 
 use ::errors::Error;
 use ::parser::{Parser, Event};
@@ -105,26 +106,22 @@ fn items() {
     assert_eq!(result, reference);
 }
 
-#[test]
-fn unterminated_string() {
-    let data = br#"{"key": "value"#;
+fn test_error(data: &[u8], error: Error) {
     let r = Parser::new(Cursor::new(data.to_vec())).last().unwrap();
     assert!(r.is_err());
-    match r.err().unwrap() {
-        Error::Unterminated => (),
-        _ => panic!("Not {}", Error::Unterminated),
+    if r.err().unwrap().description() != error.description() {
+        panic!("Not <{:?}>", error);
     }
 }
 
 #[test]
+fn unterminated_string() {
+    test_error(br#"{"key": "value"#, Error::Unterminated);
+}
+
+#[test]
 fn additional_data() {
-    let data = br#"{"key": "value"} stuff"#;
-    let r = Parser::new(Cursor::new(data.to_vec())).last().unwrap();
-    assert!(r.is_err());
-    match r.err().unwrap() {
-        Error::AdditionalData => (),
-        _ => panic!("Not {}", Error::AdditionalData),
-    }
+    test_error(br#"{"key": "value"} stuff"#, Error::AdditionalData);
 }
 
 #[test]
@@ -140,12 +137,7 @@ fn incomplete() {
         br#"{"key": "value""#,
         br#"{"key": "value","#,
     ];
-    for s in data.iter() {
-        let r = Parser::new(Cursor::new(*s)).last().unwrap();
-        assert!(r.is_err());
-        match r.err().unwrap() {
-            Error::MoreLexemes => (),
-            _ => panic!("Not {}", Error::MoreLexemes),
-        }
+    for d in data.iter() {
+        test_error(d, Error::MoreLexemes);
     }
 }
