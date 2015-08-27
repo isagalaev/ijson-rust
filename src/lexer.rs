@@ -1,6 +1,6 @@
 use std::io;
 
-use ::errors::Error;
+use ::errors::{Error, ResultIterator};
 
 
 const BUFSIZE: usize = 64 * 1024;
@@ -36,13 +36,13 @@ pub struct Lexer<T: io::Read> {
 
 impl<T: io::Read> Lexer<T> {
 
-    pub fn new(f: T) -> Lexer<T> {
-        Lexer {
+    pub fn new(f: T) -> ResultIterator<Lexer<T>> {
+        ResultIterator::new(Lexer {
             buf: [0; BUFSIZE],
             len: 0,
             pos: 0,
             f: f,
-        }
+        })
     }
 
     fn ensure_buffer(&mut self) -> io::Result<Buffer> {

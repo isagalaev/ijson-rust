@@ -107,8 +107,7 @@ fn items() {
 }
 
 fn test_error(data: &[u8], error: Error) {
-    let r = Parser::new(Cursor::new(data.to_vec()))
-            .skip_while(Result::is_ok).next().unwrap();
+    let r = Parser::new(Cursor::new(data.to_vec())).last().unwrap();
     assert!(r.is_err());
     if r.err().unwrap().description() != error.description() {
         panic!("Not <{:?}>", error);

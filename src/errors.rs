@@ -75,3 +75,32 @@ impl From<str::Utf8Error> for Error {
 }
 
 pub type Result<T> = result::Result<T, Error>;
+
+pub struct ResultIterator<I: Iterator> {
+    iterator: I,
+    errored: bool,
+}
+
+impl<I: Iterator> ResultIterator<I> {
+    pub fn new(iterator: I) -> ResultIterator<I> {
+        ResultIterator {
+            iterator: iterator,
+            errored: false,
+        }
+    }
+}
+
+impl<T, I: Iterator<Item=Result<T>>> Iterator for ResultIterator<I> {
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.errored {
+            return None
+        }
+        let value = self.iterator.next();
+        if let Some(Err(..)) = value {
+            self.errored = true
+        }
+        value
+    }
+}

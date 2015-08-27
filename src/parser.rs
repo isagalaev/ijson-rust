@@ -3,7 +3,7 @@ use std::iter::Peekable;
 use std::{str, char};
 
 use ::lexer;
-use ::errors::{Error, Result};
+use ::errors::{Error, Result, ResultIterator};
 
 
 #[derive(Debug)]
@@ -91,19 +91,19 @@ fn unescape(lexeme: &[u8]) -> Result<String> {
 }
 
 pub struct Parser<T: Read> {
-    lexer: Peekable<lexer::Lexer<T>>,
+    lexer: Peekable<ResultIterator<lexer::Lexer<T>>>,
     stack: Vec<u8>,
     state: State,
 }
 
 impl<T: Read> Parser<T> {
 
-    pub fn new(f: T) -> Parser<T> {
-        Parser {
+    pub fn new(f: T) -> ResultIterator<Parser<T>> {
+        ResultIterator::new(Parser {
             lexer: lexer::Lexer::new(f).peekable(),
             stack: vec![],
             state: State::Event(false),
-        }
+        })
     }
 
     fn consume_lexeme(&mut self) -> Result<Vec<u8>> {
