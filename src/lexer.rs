@@ -1,6 +1,6 @@
 use std::io;
 
-use ::errors::{Error, ResultIterator};
+use ::errors::{Error, Result, ResultIterator};
 
 
 const BUFSIZE: usize = 64 * 1024;
@@ -13,12 +13,24 @@ fn is_whitespace(value: u8) -> bool {
     }
 }
 
-fn is_lexeme(value: u8) -> bool {
+fn is_scalar(value: u8) -> bool {
     match value {
         b'a' ... b'z' | b'0' ... b'9' |
         b'E' |  b'.' | b'+' | b'-' => true,
         _ => false,
     }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Lexeme {
+    String(String),
+    Scalar(String),
+    OBrace,
+    CBrace,
+    OBracket,
+    CBracket,
+    Comma,
+    Colon,
 }
 
 enum Buffer {
@@ -60,7 +72,7 @@ impl<T: io::Read> Lexer<T> {
 }
 
 impl<T: io::Read> Iterator for Lexer<T> {
-    type Item = Result<Vec<u8>, Error>;
+    type Item = Result<Lexeme>;
 
     fn next(&mut self) -> Option<Self::Item> {
         while match itry!(self.ensure_buffer()) {
@@ -70,9 +82,8 @@ impl<T: io::Read> Iterator for Lexer<T> {
             self.pos += 1;
         }
 
-        let mut result = vec![];
-        if self.buf[self.pos] == b'"' {
-            result.push(b'"');
+        Some(Ok(if self.buf[self.pos] == b'"' {
+            let mut result = vec![];
             let mut escaped = false;
             self.pos += 1;
             loop {
@@ -89,14 +100,24 @@ impl<T: io::Read> Iterator for Lexer<T> {
                 }
             }
             self.pos += 1;
-            result.push(b'"');
-        } else if !is_lexeme(self.buf[self.pos]) {
-            result.push(self.buf[self.pos]);
+            Lexeme::String(itry!(String::from_utf8(result)))
+        } else if !is_scalar(self.buf[self.pos]) {
+            let ch = self.buf[self.pos];
             self.pos += 1;
+            match ch {
+                b'{' => Lexeme::OBrace,
+                b'}' => Lexeme::CBrace,
+                b'[' => Lexeme::OBracket,
+                b']' => Lexeme::CBracket,
+                b',' => Lexeme::Comma,
+                b':' => Lexeme::Colon,
+                _ => return Some(Err(Error::Unknown(ch.to_string()))),
+            }
         } else {
+            let mut result = vec![];
             loop {
                 let start = self.pos;
-                while self.pos < self.len && is_lexeme(self.buf[self.pos]) {
+                while self.pos < self.len && is_scalar(self.buf[self.pos]) {
                     self.pos += 1;
                 }
                 result.extend(self.buf[start..self.pos].iter().cloned());
@@ -105,7 +126,7 @@ impl<T: io::Read> Iterator for Lexer<T> {
                     _ => break,
                 }
             }
-        }
-        Some(Ok(result))
+            Lexeme::Scalar(itry!(String::from_utf8(result)))
+        }))
     }
 }

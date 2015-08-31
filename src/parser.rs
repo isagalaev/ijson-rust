@@ -2,7 +2,7 @@ use std::io::Read;
 use std::iter::Peekable;
 use std::{str, char};
 
-use ::lexer;
+use ::lexer::{Lexer, Lexeme};
 use ::errors::{Error, Result, ResultIterator};
 
 
@@ -20,11 +20,6 @@ pub enum Event {
     EndMap,
 }
 
-#[inline]
-fn unexpected(lexeme: Vec<u8>) -> Option<Result<Event>> {
-    Some(Err(Error::Unexpected(str::from_utf8(&lexeme[..]).unwrap().to_string())))
-}
-
 #[derive(Debug)]
 enum State {
     Closed,
@@ -32,11 +27,6 @@ enum State {
     Key(bool),
     Colon,
     Comma,
-}
-
-#[inline]
-fn trim(lexeme: &[u8]) -> &[u8] {
-    &lexeme[1..lexeme.len() - 1]
 }
 
 #[inline]
@@ -51,10 +41,10 @@ fn hexdecode(s: &[u8]) -> Option<char> {
     char::from_u32(value)
 }
 
-fn unescape(lexeme: &[u8]) -> Result<String> {
+fn unescape(lexeme_str: String) -> Result<String> {
+    let lexeme = lexeme_str.as_bytes();
     let len = lexeme.len();
-    let mut result = String::with_capacity(lexeme.len());
-
+    let mut result = String::with_capacity(len);
     let mut pos = 0;
     while pos < len {
         let start = pos;
@@ -91,8 +81,8 @@ fn unescape(lexeme: &[u8]) -> Result<String> {
 }
 
 pub struct Parser<T: Read> {
-    lexer: Peekable<ResultIterator<lexer::Lexer<T>>>,
-    stack: Vec<u8>,
+    lexer: Peekable<ResultIterator<Lexer<T>>>,
+    stack: Vec<Lexeme>,
     state: State,
 }
 
@@ -100,39 +90,30 @@ impl<T: Read> Parser<T> {
 
     pub fn new(f: T) -> ResultIterator<Parser<T>> {
         ResultIterator::new(Parser {
-            lexer: lexer::Lexer::new(f).peekable(),
+            lexer: Lexer::new(f).peekable(),
             stack: vec![],
             state: State::Event(false),
         })
     }
 
-    fn consume_lexeme(&mut self) -> Result<Vec<u8>> {
+    fn consume_lexeme(&mut self) -> Result<Lexeme> {
         self.lexer.next().unwrap_or(Err(Error::MoreLexemes))
     }
 
-    fn check_lexeme(&mut self, lexemes: &[&[u8]]) -> bool {
-        match self.lexer.peek() {
-            None | Some(&Err(..)) => false,
-            Some(&Ok(ref next)) => {
-                lexemes.iter().any(|l| *l == &next[..])
-            }
-        }
-    }
-
-    fn process_event(&self, lexeme: &[u8]) -> Result<Event> {
+    fn process_event(&self, lexeme: Lexeme) -> Result<Event> {
         Ok(match lexeme {
-            b"null" => Event::Null,
-            b"true" => Event::Boolean(true),
-            b"false" => Event::Boolean(false),
-            b"[" => Event::StartArray,
-            b"{" => Event::StartMap,
-            b"]" => Event::EndArray,
-            b"}" => Event::EndMap,
-            _ if lexeme[0] == b'"' => Event::String(try!(unescape(trim(lexeme)))),
-            _ => {
-                let s = try!(str::from_utf8(lexeme));
-                Event::Number(try!(s.parse().map_err(|_| Error::Unexpected(str::from_utf8(lexeme).unwrap().to_string()))))
-            }
+            Lexeme::OBracket => Event::StartArray,
+            Lexeme::OBrace => Event::StartMap,
+            Lexeme::CBracket => Event::EndArray,
+            Lexeme::CBrace => Event::EndMap,
+            Lexeme::String(s) => Event::String(try!(unescape(s))),
+            Lexeme::Scalar(ref s) if s == "null" => Event::Null,
+            Lexeme::Scalar(ref s) if s == "true" => Event::Boolean(true),
+            Lexeme::Scalar(ref s) if s == "false" => Event::Boolean(false),
+            Lexeme::Scalar(s) => {
+                Event::Number(try!(s.parse().map_err(|_| Error::Unknown(s))))
+            },
+            _ => unreachable!(),
         })
     }
 
@@ -153,14 +134,15 @@ impl<T: Read> Iterator for Parser<T> {
                 State::Event(can_close) => {
                     let lexeme = itry!(self.consume_lexeme());
 
-                    match &lexeme[..] {
-                        b"]" | b"}" if !can_close => return unexpected(lexeme),
-                        b"[" | b"{" => self.stack.push(lexeme[0]),
-                        b"]" | b"}" => {
-                            let expected = if lexeme[0] == b']' { b'[' } else { b'{' };
+                    match &lexeme {
+                        &Lexeme::CBracket | &Lexeme::CBrace if !can_close => return Some(Err(Error::Unexpected(lexeme))),
+                        &Lexeme::OBracket => self.stack.push(Lexeme::OBracket),
+                        &Lexeme::OBrace => self.stack.push(Lexeme::OBrace),
+                        &Lexeme::CBracket | &Lexeme::CBrace => {
+                            let expected = if Lexeme::CBracket == lexeme { Lexeme::OBracket } else { Lexeme::OBrace };
                             match self.stack.pop() {
-                                Some(value) if value == expected => (),
-                                _ => return Some(Err(Error::Unmatched(lexeme[0] as char))),
+                                Some(ref value) if *value == expected => (),
+                                _ => return Some(Err(Error::Unmatched(lexeme))),
                             }
                         }
                         _ => ()
@@ -168,53 +150,56 @@ impl<T: Read> Iterator for Parser<T> {
 
                     self.state = if self.stack.len() == 0 {
                         State::Closed
-                    } else if lexeme == b"[" {
+                    } else if lexeme == Lexeme::OBracket {
                         State::Event(true)
-                    } else if lexeme == b"{" {
+                    } else if lexeme == Lexeme::OBrace {
                         State::Key(true)
                     } else {
                         State::Comma
                     };
 
-                    return Some(self.process_event(&lexeme))
+                    return Some(self.process_event(lexeme))
                 }
                 State::Key(can_close) => {
-                    if self.check_lexeme(&[b"}"]) {
+                    if let Some(&Ok(Lexeme::CBrace)) = self.lexer.peek() {
                         if !can_close {
-                            return unexpected(vec![b'}'])
+                            return Some(Err(Error::Unexpected(Lexeme::CBrace)))
                         }
                         self.state = State::Event(true);
                         continue;
                     }
-                    let lexeme = itry!(self.consume_lexeme());
-                    if lexeme[0] != b'"' {
-                        return unexpected(lexeme)
-                    }
-                    self.state = State::Colon;
-                    let s = itry!(str::from_utf8(trim(&lexeme)));
-                    return Some(Ok(Event::Key(s.to_string())))
+                    return Some(match itry!(self.consume_lexeme()) {
+                        Lexeme::String(s) => {
+                            self.state = State::Colon;
+                            Ok(Event::Key(s))
+                        }
+                        lexeme => Err(Error::Unexpected(lexeme))
+                    })
                 }
                 State::Colon => {
-                    let lexeme = itry!(self.consume_lexeme());
-                    if lexeme != b":" {
-                        return unexpected(lexeme)
+                    match itry!(self.consume_lexeme()) {
+                        Lexeme::Colon => self.state = State::Event(false),
+                        lexeme => return Some(Err(Error::Unexpected(lexeme))),
                     }
-                    self.state = State::Event(false);
                 }
                 State::Comma => {
-                    if self.check_lexeme(&[b"]", b"}"]) {
-                        self.state = State::Event(true);
-                        continue;
+                    match self.lexer.peek() {
+                        Some(&Ok(Lexeme::CBrace)) | Some(&Ok(Lexeme::CBracket)) => {
+                            self.state = State::Event(true);
+                            continue
+                        }
+                        _ => (),
                     }
-                    let lexeme = itry!(self.consume_lexeme());
-                    if lexeme != b"," {
-                        return unexpected(lexeme)
+                    match itry!(self.consume_lexeme()) {
+                        Lexeme::Comma => {
+                            self.state = if self.stack[self.stack.len() - 1] == Lexeme::OBracket {
+                                State::Event(false)
+                            } else {
+                                State::Key(false)
+                            }
+                        },
+                        lexeme => return Some(Err(Error::Unexpected(lexeme))),
                     }
-                    self.state = if self.stack[self.stack.len() - 1] == b'[' {
-                        State::Event(false)
-                    } else {
-                        State::Key(false)
-                    };
                 }
             }
         }

@@ -1,4 +1,6 @@
-use std::{io, str, error, fmt, result};
+use std::{io, str, string, error, fmt, result};
+
+use ::lexer::Lexeme;
 
 
 #[macro_export]
@@ -15,11 +17,13 @@ macro_rules! itry {
 pub enum Error {
     Unterminated,
     IO(io::Error),
-    Unexpected(String),
-    Utf8(str::Utf8Error),
+    Unknown(String),
+    Unexpected(Lexeme),
+    Utf8(string::FromUtf8Error),
+    Utf8s(str::Utf8Error),
     Escape(String),
     MoreLexemes,
-    Unmatched(char),
+    Unmatched(Lexeme),
     AdditionalData,
 }
 
@@ -28,11 +32,13 @@ impl fmt::Display for Error {
         match *self {
             Error::Unterminated => write!(f, "{}", self),
             Error::IO(_) => write!(f, "I/O Error: {}", self),
-            Error::Unexpected(ref s) => write!(f, "Unexpected lexeme: '{}'", s),
+            Error::Unknown(ref s) => write!(f, "Unexpected lexeme: '{}'", s),
+            Error::Unexpected(ref s) => write!(f, "Unexpected lexeme: '{:?}'", s),
             Error::Utf8(ref e) => write!(f, "UTF8 Error: {}", e),
+            Error::Utf8s(ref e) => write!(f, "UTF8 Error: {}", e),
             Error::Escape(ref s) => write!(f, "Malformed escape: '{}'", s),
             Error::MoreLexemes => write!(f, "More lexemes expected"),
-            Error::Unmatched(ref c) => write!(f, "Unmatched container terminator: {}", c),
+            Error::Unmatched(ref s) => write!(f, "Unmatched container terminator: {:?}", s),
             Error::AdditionalData => write!(f, "Additional data in the source stream after parsed value"),
         }
     }
@@ -43,8 +49,10 @@ impl error::Error for Error {
         match *self {
             Error::Unterminated => "unterminated string",
             Error::IO(ref e) => e.description(),
+            Error::Unknown(..) => "unknown lexeme",
             Error::Unexpected(..) => "unexpected lexeme",
             Error::Utf8(ref e) => e.description(),
+            Error::Utf8s(ref e) => e.description(),
             Error::Escape(..) => "malformed escape",
             Error::MoreLexemes => "more lexemes expected",
             Error::Unmatched(..) => "unmatched container terminator",
@@ -68,9 +76,15 @@ impl From<io::Error> for Error {
     }
 }
 
+impl From<string::FromUtf8Error> for Error {
+    fn from(e: string::FromUtf8Error) -> Self {
+        Error::Utf8(e)
+    }
+}
+
 impl From<str::Utf8Error> for Error {
     fn from(e: str::Utf8Error) -> Self {
-        Error::Utf8(e)
+        Error::Utf8s(e)
     }
 }
 
