@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, str, char};
 
 use ::errors::{Error, Result, ResultIterator};
 
@@ -19,6 +19,56 @@ fn is_scalar(value: u8) -> bool {
         b'E' |  b'.' | b'+' | b'-' => true,
         _ => false,
     }
+}
+
+#[inline]
+fn hexdecode(s: &[u8]) -> Option<char> {
+    let mut value = 0;
+    for c in s.iter() {
+        match (*c as char).to_digit(16) {
+            None => return None,
+            Some(d) => value = value * 16 + d,
+        }
+    }
+    char::from_u32(value)
+}
+
+fn unescape(lexeme: &[u8]) -> Result<String> {
+    let len = lexeme.len();
+    let mut result = String::with_capacity(len);
+    let mut pos = 0;
+    while pos < len {
+        let start = pos;
+        while pos < len && lexeme[pos] != b'\\' {
+            pos += 1;
+        }
+        result.push_str(try!(str::from_utf8(&lexeme[start..pos])));
+        if pos < len {
+            pos += 1; // safe to do as the lexer makes sure there's at lease one character after \
+            result.push(match lexeme[pos] {
+                b'u' => {
+                    if pos + 4 >= len {
+                        return Err(Error::Escape(str::from_utf8(&lexeme[pos..]).unwrap().to_string()))
+                    }
+                    let s = &lexeme[pos+1..pos+5];
+                    pos += 4;
+                    match hexdecode(s) {
+                        None => return Err(Error::Escape(str::from_utf8(s).unwrap().to_string())),
+                        Some(ch) => ch,
+                    }
+                }
+                b'b' => '\x08',
+                b'f' => '\x0c',
+                b'n' => '\n',
+                b'r' => '\r',
+                b't' => '\t',
+                b @ b'"' | b @ b'\\' => b as char,
+                c => return Err(Error::Escape(str::from_utf8(&[c]).unwrap().to_string())),
+            });
+            pos += 1;
+        }
+    }
+    Ok(result)
 }
 
 #[derive(Debug, PartialEq)]
@@ -100,7 +150,7 @@ impl<T: io::Read> Iterator for Lexer<T> {
                 }
             }
             self.pos += 1;
-            Lexeme::String(itry!(String::from_utf8(result)))
+            Lexeme::String(itry!(unescape(&result[..])))
         } else if !is_scalar(self.buf[self.pos]) {
             let ch = self.buf[self.pos];
             self.pos += 1;
