@@ -176,7 +176,7 @@ impl<T: io::Read> Iterator for Lexer<T> {
                     _ => break,
                 }
             }
-            Lexeme::Scalar(itry!(String::from_utf8(result)))
+            Lexeme::Scalar(itry!(str::from_utf8(&result[..])).to_string())
         }))
     }
 }
