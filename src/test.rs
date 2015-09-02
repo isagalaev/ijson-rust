@@ -108,9 +108,10 @@ fn items() {
 
 fn test_error(data: &[u8], error: Error) {
     let r = Parser::new(Cursor::new(data.to_vec())).last().unwrap();
-    assert!(r.is_err());
-    if r.err().unwrap().description() != error.description() {
-        panic!("Not <{:?}>", error);
+    assert!(r.is_err(), "Not an error: {:?}", r.ok().unwrap());
+    let rerror = r.err().unwrap();
+    if rerror.description() != error.description() {
+        panic!("Not <{:?}> at data: {:?}. Got {:?} instead.", error, data, rerror);
     }
 }
 
@@ -139,5 +140,18 @@ fn incomplete() {
     ];
     for d in data.iter() {
         test_error(d, Error::MoreLexemes);
+    }
+}
+
+#[test]
+fn bad_escape() {
+    let data: Vec<&'static [u8]> = vec![
+        br#""\w""#,
+        br#""\u""#,
+        br#""\u0""#,
+        br#""\uD800""#,
+    ];
+    for d in data.iter() {
+        test_error(d, Error::Escape(vec![]));
     }
 }
