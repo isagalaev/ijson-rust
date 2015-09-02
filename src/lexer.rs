@@ -48,12 +48,12 @@ fn unescape(lexeme: &[u8]) -> Result<String> {
             result.push(match lexeme[pos] {
                 b'u' => {
                     if pos + 4 >= len {
-                        return Err(Error::Escape(str::from_utf8(&lexeme[pos..]).unwrap().to_string()))
+                        return Err(Error::Escape(lexeme[pos..].to_vec()))
                     }
                     let s = &lexeme[pos+1..pos+5];
                     pos += 4;
                     match hexdecode(s) {
-                        None => return Err(Error::Escape(str::from_utf8(s).unwrap().to_string())),
+                        None => return Err(Error::Escape(s.to_vec())),
                         Some(ch) => ch,
                     }
                 }
@@ -63,7 +63,7 @@ fn unescape(lexeme: &[u8]) -> Result<String> {
                 b'r' => '\r',
                 b't' => '\t',
                 b @ b'"' | b @ b'\\' => b as char,
-                c => return Err(Error::Escape(str::from_utf8(&[c]).unwrap().to_string())),
+                c => return Err(Error::Escape(vec![c])),
             });
             pos += 1;
         }
