@@ -149,6 +149,7 @@ fn bad_escape() {
         br#""\w""#,
         br#""\u""#,
         br#""\u0""#,
+        br#""\uXXXX""#,
         br#""\uD800""#,
     ];
     for d in data.iter() {
