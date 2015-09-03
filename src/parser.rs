@@ -48,21 +48,18 @@ impl<T: Read> Parser<T> {
         self.lexer.next().unwrap_or(Err(Error::MoreLexemes))
     }
 
-    fn process_event(&self, lexeme: Lexeme) -> Result<Event> {
-        Ok(match lexeme {
+    fn process_event(&self, lexeme: Lexeme) -> Event {
+        match lexeme {
             Lexeme::OBracket => Event::StartArray,
             Lexeme::OBrace => Event::StartMap,
             Lexeme::CBracket => Event::EndArray,
             Lexeme::CBrace => Event::EndMap,
             Lexeme::String(s) => Event::String(s),
-            Lexeme::Scalar(ref s) if s == "null" => Event::Null,
-            Lexeme::Scalar(ref s) if s == "true" => Event::Boolean(true),
-            Lexeme::Scalar(ref s) if s == "false" => Event::Boolean(false),
-            Lexeme::Scalar(s) => {
-                Event::Number(try!(s.parse().map_err(|_| Error::Unknown(s))))
-            },
-            _ => unreachable!(),
-        })
+            Lexeme::Number(n) => Event::Number(n),
+            Lexeme::Null => Event::Null,
+            Lexeme::Boolean(b) => Event::Boolean(b),
+            Lexeme::Comma | Lexeme::Colon => unreachable!(),
+        }
     }
 
 }
@@ -106,7 +103,7 @@ impl<T: Read> Iterator for Parser<T> {
                         State::Comma
                     };
 
-                    return Some(self.process_event(lexeme))
+                    return Some(Ok(self.process_event(lexeme)))
                 }
                 State::Key(can_close) => {
                     if let Some(&Ok(Lexeme::CBrace)) = self.lexer.peek() {

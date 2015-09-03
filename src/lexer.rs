@@ -13,7 +13,7 @@ fn is_whitespace(value: u8) -> bool {
     }
 }
 
-fn is_scalar(value: u8) -> bool {
+fn is_word(value: u8) -> bool {
     match value {
         b'a' ... b'z' | b'0' ... b'9' |
         b'E' |  b'.' | b'+' | b'-' => true,
@@ -74,7 +74,9 @@ fn unescape(lexeme: &[u8]) -> Result<String> {
 #[derive(Debug, PartialEq)]
 pub enum Lexeme {
     String(String),
-    Scalar(String),
+    Number(f64),
+    Boolean(bool),
+    Null,
     OBrace,
     CBrace,
     OBracket,
@@ -151,7 +153,29 @@ impl<T: io::Read> Iterator for Lexer<T> {
             }
             self.pos += 1;
             Lexeme::String(itry!(unescape(&result[..])))
-        } else if !is_scalar(self.buf[self.pos]) {
+        } else if is_word(self.buf[self.pos]) {
+            let mut result = vec![];
+            loop {
+                let start = self.pos;
+                while self.pos < self.len && is_word(self.buf[self.pos]) {
+                    self.pos += 1;
+                }
+                result.extend(self.buf[start..self.pos].iter().cloned());
+                match itry!(self.ensure_buffer()) {
+                    Buffer::Reset => (), // continue
+                    _ => break,
+                }
+            }
+            match &result[..] {
+                b"true" => Lexeme::Boolean(true),
+                b"false" => Lexeme::Boolean(false),
+                b"null" => Lexeme::Null,
+                _ => {
+                    let s = unsafe { str::from_utf8_unchecked(&result[..]).to_string() };
+                    Lexeme::Number(itry!(s.parse().map_err(|_| Error::Unknown(s))))
+                }
+            }
+        } else {
             let ch = self.buf[self.pos];
             self.pos += 1;
             match ch {
@@ -163,20 +187,6 @@ impl<T: io::Read> Iterator for Lexer<T> {
                 b':' => Lexeme::Colon,
                 _ => return Some(Err(Error::Unknown(ch.to_string()))),
             }
-        } else {
-            let mut result = vec![];
-            loop {
-                let start = self.pos;
-                while self.pos < self.len && is_scalar(self.buf[self.pos]) {
-                    self.pos += 1;
-                }
-                result.extend(self.buf[start..self.pos].iter().cloned());
-                match itry!(self.ensure_buffer()) {
-                    Buffer::Reset => (), // continue
-                    _ => break,
-                }
-            }
-            Lexeme::Scalar(itry!(str::from_utf8(&result[..])).to_string())
         }))
     }
 }
