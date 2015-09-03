@@ -19,6 +19,22 @@ pub enum Event {
     EndMap,
 }
 
+impl From<Lexeme> for Event {
+    fn from(lexeme: Lexeme) -> Self {
+        match lexeme {
+            Lexeme::OBracket => Event::StartArray,
+            Lexeme::OBrace => Event::StartMap,
+            Lexeme::CBracket => Event::EndArray,
+            Lexeme::CBrace => Event::EndMap,
+            Lexeme::String(s) => Event::String(s),
+            Lexeme::Number(n) => Event::Number(n),
+            Lexeme::Null => Event::Null,
+            Lexeme::Boolean(b) => Event::Boolean(b),
+            Lexeme::Comma | Lexeme::Colon => unreachable!(),
+        }
+    }
+}
+
 #[derive(Debug)]
 enum State {
     Closed,
@@ -46,20 +62,6 @@ impl<T: Read> Parser<T> {
 
     fn consume_lexeme(&mut self) -> Result<Lexeme> {
         self.lexer.next().unwrap_or(Err(Error::MoreLexemes))
-    }
-
-    fn process_event(&self, lexeme: Lexeme) -> Event {
-        match lexeme {
-            Lexeme::OBracket => Event::StartArray,
-            Lexeme::OBrace => Event::StartMap,
-            Lexeme::CBracket => Event::EndArray,
-            Lexeme::CBrace => Event::EndMap,
-            Lexeme::String(s) => Event::String(s),
-            Lexeme::Number(n) => Event::Number(n),
-            Lexeme::Null => Event::Null,
-            Lexeme::Boolean(b) => Event::Boolean(b),
-            Lexeme::Comma | Lexeme::Colon => unreachable!(),
-        }
     }
 
 }
@@ -103,7 +105,7 @@ impl<T: Read> Iterator for Parser<T> {
                         State::Comma
                     };
 
-                    return Some(Ok(self.process_event(lexeme)))
+                    return Some(Ok(Event::from(lexeme)))
                 }
                 State::Key(can_close) => {
                     if let Some(&Ok(Lexeme::CBrace)) = self.lexer.peek() {
