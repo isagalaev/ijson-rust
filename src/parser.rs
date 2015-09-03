@@ -95,7 +95,7 @@ impl<T: Read> Iterator for Parser<T> {
                         _ => ()
                     };
 
-                    self.state = if self.stack.len() == 0 {
+                    self.state = if self.stack.is_empty() {
                         State::Closed
                     } else if lexeme == Lexeme::OBracket {
                         State::Event(true)
