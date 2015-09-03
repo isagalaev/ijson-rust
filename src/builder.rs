@@ -18,35 +18,35 @@ pub struct Prefix<E: EventIterator> {
     parser: E,
 }
 
+impl<E: EventIterator> Prefix<E> {
+    fn matches(&mut self, event: &Event) -> bool {
+        match *event {
+            Event::Key(_) | Event::EndMap | Event::EndArray => {
+                self.path.pop();
+            }
+            _ => (),
+        }
+
+        let result = self.path.starts_with(&self.reference);
+
+        match *event {
+            Event::Key(ref value) => self.path.push(value.clone()),
+            Event::StartMap => self.path.push("".to_owned()),
+            Event::StartArray => self.path.push("item".to_owned()),
+            _ => (),
+        }
+
+        result
+    }
+}
+
 impl<E: EventIterator> Iterator for Prefix<E> {
     type Item = Result<Event>;
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(r) = self.parser.next() {
             let event = itry!(r);
-            match &event {
-                &Event::Key(_) | &Event::EndMap | &Event::EndArray => {
-                    self.path.pop();
-                }
-                _ => (),
-            }
-
-            let found = self.path.starts_with(&self.reference);
-
-            match &event {
-                &Event::Key(ref value) => {
-                    self.path.push(value.clone());
-                }
-                &Event::StartMap => {
-                    self.path.push("".to_owned())
-                }
-                &Event::StartArray => {
-                    self.path.push("item".to_owned());
-                }
-                _ => (),
-            }
-
-            if found {
+            if self.matches(&event) {
                 return Some(Ok(event))
             }
         }
