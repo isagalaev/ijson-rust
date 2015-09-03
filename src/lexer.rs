@@ -22,15 +22,12 @@ fn is_scalar(value: u8) -> bool {
 }
 
 #[inline]
-fn hexdecode(s: &[u8]) -> Option<char> {
-    let mut value = 0;
-    for c in s.iter() {
-        match (*c as char).to_digit(16) {
-            None => return None,
-            Some(d) => value = value * 16 + d,
-        }
+fn hexdecode(buf: &[u8]) -> Result<char> {
+    let s = try!(str::from_utf8(buf));
+    match u32::from_str_radix(s, 16).map(char::from_u32) {
+        Ok(Some(ch)) => Ok(ch),
+        _ => Err(Error::Escape(buf.to_vec())),
     }
-    char::from_u32(value)
 }
 
 fn unescape(lexeme: &[u8]) -> Result<String> {
@@ -52,10 +49,7 @@ fn unescape(lexeme: &[u8]) -> Result<String> {
                     }
                     let s = &lexeme[pos+1..pos+5];
                     pos += 4;
-                    match hexdecode(s) {
-                        None => return Err(Error::Escape(s.to_vec())),
-                        Some(ch) => ch,
-                    }
+                    try!(hexdecode(s))
                 }
                 b'b' => '\x08',
                 b'f' => '\x0c',
