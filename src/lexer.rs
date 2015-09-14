@@ -6,6 +6,7 @@ use ::errors::{Error, Result};
 const BUFSIZE: usize = 64 * 1024;
 
 
+#[inline(always)]
 fn is_whitespace(value: u8) -> bool {
     match value {
         9 | 10 | 13 | 32 => true,
