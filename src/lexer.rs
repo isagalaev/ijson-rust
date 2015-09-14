@@ -33,44 +33,6 @@ fn hexdecode(s: &[u8]) -> Option<char> {
     char::from_u32(value)
 }
 
-fn unescape(lexeme: &[u8]) -> Result<String> {
-    let len = lexeme.len();
-    let mut result = String::with_capacity(len);
-    let mut pos = 0;
-    while pos < len {
-        let start = pos;
-        while pos < len && lexeme[pos] != b'\\' {
-            pos += 1;
-        }
-        result.push_str(try!(str::from_utf8(&lexeme[start..pos])));
-        if pos < len {
-            pos += 1; // safe to do as the lexer makes sure there's at lease one character after \
-            result.push(match lexeme[pos] {
-                b'u' => {
-                    if pos + 4 >= len {
-                        return Err(Error::Escape(lexeme[pos..].to_vec()))
-                    }
-                    let s = &lexeme[pos+1..pos+5];
-                    pos += 4;
-                    match hexdecode(s) {
-                        None => return Err(Error::Escape(s.to_vec())),
-                        Some(ch) => ch,
-                    }
-                }
-                b'b' => '\x08',
-                b'f' => '\x0c',
-                b'n' => '\n',
-                b'r' => '\r',
-                b't' => '\t',
-                b @ b'"' | b @ b'\\' => b as char,
-                c => return Err(Error::Escape(vec![c])),
-            });
-            pos += 1;
-        }
-    }
-    Ok(result)
-}
-
 #[derive(Debug, PartialEq)]
 pub enum Lexeme {
     String(String),
@@ -121,6 +83,51 @@ impl<T: io::Read> Lexer<T> {
         }
     }
 
+    fn ensure_at_least(&mut self, min: usize) -> io::Result<Buffer> {
+        let remainder = self.len - self.pos;
+        if remainder >= min {
+            Ok(Buffer::Within)
+        } else {
+            for i in 0..remainder {
+                self.buf[i] = self.buf[self.pos + i]
+            }
+            self.pos = 0;
+            self.f.read(&mut self.buf[remainder..]).and_then(|size| {
+                self.len = remainder + size;
+                Ok(if self.len >= min { Buffer::Reset } else { Buffer::Empty })
+            })
+        }
+    }
+
+    fn parse_escape(&mut self) -> Result<char> {
+        if let Buffer::Empty = try!(self.ensure_at_least(2)) {
+            return Err(Error::Escape(self.buf[self.pos..].to_vec()))
+        }
+        self.pos += 1; // swallow \
+        let escape = self.buf[self.pos];
+        self.pos += 1; // move past the escape symbol
+        Ok(match escape {
+            b'u' => {
+                if let Buffer::Empty = try!(self.ensure_at_least(4)) {
+                    return Err(Error::Escape(self.buf[self.pos..].to_vec()))
+                }
+                let s = &self.buf[self.pos..self.pos + 4];
+                self.pos += 4;
+                match hexdecode(s) {
+                    None => return Err(Error::Escape(s.to_vec())),
+                    Some(ch) => ch,
+                }
+            }
+            b'b' => '\x08',
+            b'f' => '\x0c',
+            b'n' => '\n',
+            b'r' => '\r',
+            b't' => '\t',
+            b @ b'"' | b @ b'\\' => b as char,
+            c => return Err(Error::Escape(vec![c])),
+        })
+    }
+
 }
 
 impl<T: io::Read> Iterator for Lexer<T> {
@@ -135,24 +142,27 @@ impl<T: io::Read> Iterator for Lexer<T> {
         }
 
         Some(Ok(if self.buf[self.pos] == b'"' {
-            let mut result = vec![];
-            let mut escaped = false;
+            let mut result = String::with_capacity(4096);
             self.pos += 1;
             loop {
                 let start = self.pos;
-                while self.pos < self.len && (escaped || self.buf[self.pos] != b'"') {
-                    escaped = !escaped && self.buf[self.pos] == b'\\';
+                while self.pos < self.len && !(self.buf[self.pos] == b'"' || self.buf[self.pos] == b'\\') {
                     self.pos += 1;
                 }
-                result.extend(self.buf[start..self.pos].iter().cloned());
+                result.push_str(itry!(str::from_utf8(&self.buf[start..self.pos])));
                 match itry!(self.ensure_buffer()) {
                     Buffer::Empty => return Some(Err(Error::Unterminated)),
-                    Buffer::Within => break,
                     Buffer::Reset => (), // continue
+                    Buffer::Within => {  // " or \
+                        if self.buf[self.pos] == b'"' {
+                            break
+                        }
+                        result.push(itry!(self.parse_escape()))
+                    }
                 }
             }
             self.pos += 1;
-            Lexeme::String(itry!(unescape(&result[..])))
+            Lexeme::String(result)
         } else if is_word(self.buf[self.pos]) {
             let mut result = vec![];
             loop {
