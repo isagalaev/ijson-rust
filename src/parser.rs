@@ -45,7 +45,7 @@ enum State {
 }
 
 pub struct Parser<T: Read> {
-    lexer: Peekable<ResultIterator<Lexer<T>>>,
+    lexer: Peekable<Lexer<T>>,
     stack: Vec<Lexeme>,
     state: State,
 }
