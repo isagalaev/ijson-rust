@@ -129,6 +129,46 @@ impl<T: io::Read> Lexer<T> {
         })
     }
 
+    fn consume_string(&mut self) -> Result<String> {
+        let mut result = String::with_capacity(4096);
+        self.pos += 1;
+        loop {
+            let start = self.pos;
+            while self.pos < self.len && !(self.buf[self.pos] == b'"' || self.buf[self.pos] == b'\\') {
+                self.pos += 1;
+            }
+            result.push_str(try!(str::from_utf8(&self.buf[start..self.pos])));
+            match try!(self.ensure_buffer()) {
+                Buffer::Empty => return Err(Error::Unterminated),
+                Buffer::Reset => (), // continue
+                Buffer::Within => {  // " or \
+                    if self.buf[self.pos] == b'"' {
+                        break
+                    }
+                    result.push(try!(self.parse_escape()))
+                }
+            }
+        }
+        self.pos += 1;
+        Ok(result)
+    }
+
+    fn consume_word(&mut self) -> Result<Vec<u8>> {
+        let mut result = vec![];
+        loop {
+            let start = self.pos;
+            while self.pos < self.len && is_word(self.buf[self.pos]) {
+                self.pos += 1;
+            }
+            result.extend(self.buf[start..self.pos].iter().cloned());
+            match try!(self.ensure_buffer()) {
+                Buffer::Reset => (), // continue
+                _ => break,
+            }
+        }
+        Ok(result)
+    }
+
 }
 
 impl<T: io::Read> Iterator for Lexer<T> {
@@ -143,46 +183,14 @@ impl<T: io::Read> Iterator for Lexer<T> {
         }
 
         Some(Ok(if self.buf[self.pos] == b'"' {
-            let mut result = String::with_capacity(4096);
-            self.pos += 1;
-            loop {
-                let start = self.pos;
-                while self.pos < self.len && !(self.buf[self.pos] == b'"' || self.buf[self.pos] == b'\\') {
-                    self.pos += 1;
-                }
-                result.push_str(itry!(str::from_utf8(&self.buf[start..self.pos])));
-                match itry!(self.ensure_buffer()) {
-                    Buffer::Empty => return Some(Err(Error::Unterminated)),
-                    Buffer::Reset => (), // continue
-                    Buffer::Within => {  // " or \
-                        if self.buf[self.pos] == b'"' {
-                            break
-                        }
-                        result.push(itry!(self.parse_escape()))
-                    }
-                }
-            }
-            self.pos += 1;
-            Lexeme::String(result)
+            Lexeme::String(itry!(self.consume_string()))
         } else if is_word(self.buf[self.pos]) {
-            let mut result = vec![];
-            loop {
-                let start = self.pos;
-                while self.pos < self.len && is_word(self.buf[self.pos]) {
-                    self.pos += 1;
-                }
-                result.extend(self.buf[start..self.pos].iter().cloned());
-                match itry!(self.ensure_buffer()) {
-                    Buffer::Reset => (), // continue
-                    _ => break,
-                }
-            }
-            match &result[..] {
+            match &itry!(self.consume_word())[..] {
                 b"true" => Lexeme::Boolean(true),
                 b"false" => Lexeme::Boolean(false),
                 b"null" => Lexeme::Null,
-                _ => {
-                    let s = unsafe { str::from_utf8_unchecked(&result[..]).to_string() };
+                r @ _ => {
+                    let s = unsafe { str::from_utf8_unchecked(r).to_string() };
                     Lexeme::Number(itry!(s.parse().map_err(|_| Error::Unknown(s))))
                 }
             }
