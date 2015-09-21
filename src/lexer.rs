@@ -3,7 +3,7 @@ use std::{io, str, char};
 use ::errors::{Error, Result};
 
 
-const BUFSIZE: usize = 64 * 1024;
+const BUFSIZE: usize = 4 * 1024;
 
 
 #[inline(always)]
@@ -130,7 +130,7 @@ impl<T: io::Read> Lexer<T> {
     }
 
     fn consume_string(&mut self) -> Result<String> {
-        let mut result = String::with_capacity(4096);
+        let mut result = String::with_capacity(BUFSIZE);
         self.pos += 1;
         loop {
             let start = self.pos;
