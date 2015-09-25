@@ -14,14 +14,6 @@ fn is_whitespace(value: u8) -> bool {
     }
 }
 
-#[inline(always)]
-fn is_word(value: u8) -> bool {
-    match value {
-        b'a' ... b'z' => true,
-        _ => false,
-    }
-}
-
 fn is_number(value: u8) -> bool {
     match value {
         b'+' | b'-' | b'.' | b'0' ... b'9' | b'E' | b'e' => true,
@@ -160,20 +152,18 @@ impl<T: io::Read> Lexer<T> {
         Ok(result)
     }
 
-    fn consume_word(&mut self) -> Result<Vec<u8>> {
-        let mut result = vec![];
-        loop {
-            let start = self.pos;
-            while self.pos < self.len && is_word(self.buf[self.pos]) {
-                self.pos += 1;
+    fn check_word(&mut self, expected: &[u8]) -> Result<()> {
+        let mut iter = expected.iter();
+        while let Some(byte) = iter.next() {
+            if let Buffer::Empty = try!(self.ensure_buffer()) {
+                return Err(Error::Unknown(b"".to_vec()))
             }
-            result.extend(self.buf[start..self.pos].iter().cloned());
-            match try!(self.ensure_buffer()) {
-                Buffer::Reset => (), // continue
-                _ => break,
+            if self.buf[self.pos] != *byte {
+                return Err(Error::Unknown(self.buf[self.pos..self.pos + 1].to_vec()))
             }
+            self.pos += 1;
         }
-        Ok(result)
+        Ok(())
     }
 
     fn consume_number(&mut self) -> Result<Vec<u8>> {
@@ -207,13 +197,15 @@ impl<T: io::Read> Iterator for Lexer<T> {
 
         Some(Ok(if self.buf[self.pos] == b'"' {
             Lexeme::String(itry!(self.consume_string()))
-        } else if is_word(self.buf[self.pos]) {
-            match &itry!(self.consume_word())[..] {
-                b"true" => Lexeme::Boolean(true),
-                b"false" => Lexeme::Boolean(false),
-                b"null" => Lexeme::Null,
-                s @ _ => return Some(Err(Error::Unknown(s.to_owned()))),
-            }
+        } else if self.buf[self.pos] == b't'     {
+            itry!(self.check_word(b"true"));
+            Lexeme::Boolean(true)
+        } else if self.buf[self.pos] == b'f' {
+            itry!(self.check_word(b"false"));
+            Lexeme::Boolean(false)
+        } else if self.buf[self.pos] == b'n' {
+            itry!(self.check_word(b"null"));
+                Lexeme::Null
         } else if is_number(self.buf[self.pos]) {
             let buffer = itry!(self.consume_number());
             let s = unsafe { str::from_utf8_unchecked(&buffer[..]) };
