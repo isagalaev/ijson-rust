@@ -17,7 +17,7 @@ macro_rules! itry {
 pub enum Error {
     Unterminated,
     IO(io::Error),
-    Unknown(String),
+    Unknown(Vec<u8>),
     Unexpected(Lexeme),
     Utf8(str::Utf8Error),
     Escape(Vec<u8>),
@@ -31,7 +31,7 @@ impl fmt::Display for Error {
         match *self {
             Error::Unterminated => write!(f, "{}", self),
             Error::IO(_) => write!(f, "I/O Error: {}", self),
-            Error::Unknown(ref s) => write!(f, "Unexpected lexeme: '{}'", s),
+            Error::Unknown(ref s) => write!(f, "Unexpected lexeme: '{:?}'", s),
             Error::Unexpected(ref s) => write!(f, "Unexpected lexeme: '{:?}'", s),
             Error::Utf8(ref e) => write!(f, "UTF8 Error: {}", e),
             Error::Escape(ref s) => write!(f, "Malformed escape: {:?}", s),

@@ -17,8 +17,14 @@ fn is_whitespace(value: u8) -> bool {
 #[inline(always)]
 fn is_word(value: u8) -> bool {
     match value {
-        b'a' ... b'z' | b'0' ... b'9' |
-        b'E' |  b'.' | b'+' | b'-' => true,
+        b'a' ... b'z' => true,
+        _ => false,
+    }
+}
+
+fn is_number(value: u8) -> bool {
+    match value {
+        b'+' | b'-' | b'.' | b'0' ... b'9' | b'E' | b'e' => true,
         _ => false,
     }
 }
@@ -170,6 +176,22 @@ impl<T: io::Read> Lexer<T> {
         Ok(result)
     }
 
+    fn consume_number(&mut self) -> Result<Vec<u8>> {
+        let mut result = vec![];
+        loop {
+            let start = self.pos;
+            while self.pos < self.len && is_number(self.buf[self.pos]) {
+                self.pos += 1;
+            }
+            result.extend(self.buf[start..self.pos].iter().cloned());
+            match try!(self.ensure_buffer()) {
+                Buffer::Reset => (), // continue
+                _ => break,
+            }
+        }
+        Ok(result)
+    }
+
 }
 
 impl<T: io::Read> Iterator for Lexer<T> {
@@ -190,11 +212,12 @@ impl<T: io::Read> Iterator for Lexer<T> {
                 b"true" => Lexeme::Boolean(true),
                 b"false" => Lexeme::Boolean(false),
                 b"null" => Lexeme::Null,
-                r @ _ => {
-                    let s = unsafe { str::from_utf8_unchecked(r).to_string() };
-                    Lexeme::Number(itry!(s.parse().map_err(|_| Error::Unknown(s))))
-                }
+                s @ _ => return Some(Err(Error::Unknown(s.to_owned()))),
             }
+        } else if is_number(self.buf[self.pos]) {
+            let buffer = itry!(self.consume_number());
+            let s = unsafe { str::from_utf8_unchecked(&buffer[..]) };
+            Lexeme::Number(itry!(s.parse().map_err(|_| Error::Unknown(buffer.clone()))))
         } else {
             let ch = self.buf[self.pos];
             self.pos += 1;
@@ -205,7 +228,7 @@ impl<T: io::Read> Iterator for Lexer<T> {
                 b']' => Lexeme::CBracket,
                 b',' => Lexeme::Comma,
                 b':' => Lexeme::Colon,
-                _ => return Some(Err(Error::Unknown(ch.to_string()))),
+                _ => return Some(Err(Error::Unknown(vec![ch]))),
             }
         }))
     }
