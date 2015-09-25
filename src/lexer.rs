@@ -14,6 +14,7 @@ fn is_whitespace(value: u8) -> bool {
     }
 }
 
+#[inline(always)]
 fn is_word(value: u8) -> bool {
     match value {
         b'a' ... b'z' | b'0' ... b'9' |
