@@ -195,32 +195,36 @@ impl<T: io::Read> Iterator for Lexer<T> {
             self.pos += 1;
         }
 
-        Some(Ok(if self.buf[self.pos] == b'"' {
-            Lexeme::String(itry!(self.consume_string()))
-        } else if self.buf[self.pos] == b't'     {
-            itry!(self.check_word(b"true"));
-            Lexeme::Boolean(true)
-        } else if self.buf[self.pos] == b'f' {
-            itry!(self.check_word(b"false"));
-            Lexeme::Boolean(false)
-        } else if self.buf[self.pos] == b'n' {
-            itry!(self.check_word(b"null"));
+        Some(Ok(match self.buf[self.pos] {
+            b'"' => Lexeme::String(itry!(self.consume_string())),
+            b't' => {
+                itry!(self.check_word(b"true"));
+                Lexeme::Boolean(true)
+            }
+            b'f' => {
+                itry!(self.check_word(b"false"));
+                Lexeme::Boolean(false)
+            }
+            b'n' => {
+                itry!(self.check_word(b"null"));
                 Lexeme::Null
-        } else if is_number(self.buf[self.pos]) {
-            let buffer = itry!(self.consume_number());
-            let s = unsafe { str::from_utf8_unchecked(&buffer[..]) };
-            Lexeme::Number(itry!(s.parse().map_err(|_| Error::Unknown(buffer.clone()))))
-        } else {
-            let ch = self.buf[self.pos];
-            self.pos += 1;
-            match ch {
-                b'{' => Lexeme::OBrace,
-                b'}' => Lexeme::CBrace,
-                b'[' => Lexeme::OBracket,
-                b']' => Lexeme::CBracket,
-                b',' => Lexeme::Comma,
-                b':' => Lexeme::Colon,
-                _ => return Some(Err(Error::Unknown(vec![ch]))),
+            }
+            b'+' | b'-' | b'.' | b'0' ... b'9' => {
+                let buffer = itry!(self.consume_number());
+                let s = unsafe { str::from_utf8_unchecked(&buffer[..]) };
+                Lexeme::Number(itry!(s.parse().map_err(|_| Error::Unknown(buffer.clone()))))
+            }
+            byte => {
+                self.pos += 1;
+                match byte {
+                    b'{' => Lexeme::OBrace,
+                    b'}' => Lexeme::CBrace,
+                    b'[' => Lexeme::OBracket,
+                    b']' => Lexeme::CBracket,
+                    b',' => Lexeme::Comma,
+                    b':' => Lexeme::Colon,
+                    _ => return Some(Err(Error::Unknown(vec![byte]))),
+                }
             }
         }))
     }
