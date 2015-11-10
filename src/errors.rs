@@ -1,4 +1,4 @@
-use std::{io, str, error, fmt, result};
+use std::{io, string, error, fmt, result};
 
 use ::lexer::Lexeme;
 
@@ -19,7 +19,7 @@ pub enum Error {
     IO(io::Error),
     Unknown(Vec<u8>),
     Unexpected(Lexeme),
-    Utf8(str::Utf8Error),
+    Utf8(string::FromUtf8Error),
     Escape(Vec<u8>),
     MoreLexemes,
     Unmatched(Lexeme),
@@ -73,8 +73,8 @@ impl From<io::Error> for Error {
     }
 }
 
-impl From<str::Utf8Error> for Error {
-    fn from(e: str::Utf8Error) -> Self {
+impl From<string::FromUtf8Error> for Error {
+    fn from(e: string::FromUtf8Error) -> Self {
         Error::Utf8(e)
     }
 }

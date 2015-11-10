@@ -1,3 +1,5 @@
+#![feature(unicode)]
+
 extern crate rustc_serialize;
 
 #[macro_use] mod errors;

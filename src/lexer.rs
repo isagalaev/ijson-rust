@@ -129,14 +129,14 @@ impl<T: io::Read> Lexer<T> {
     }
 
     fn consume_string(&mut self) -> Result<String> {
-        let mut result = String::with_capacity(BUFSIZE);
+        let mut result = Vec::with_capacity(BUFSIZE);
         self.pos += 1;
         loop {
             let start = self.pos;
             while self.pos < self.len && !(self.buf[self.pos] == b'"' || self.buf[self.pos] == b'\\') {
                 self.pos += 1;
             }
-            result.push_str(try!(str::from_utf8(&self.buf[start..self.pos])));
+            result.extend(&self.buf[start..self.pos]);
             match try!(self.ensure_buffer()) {
                 Buffer::Empty => return Err(Error::Unterminated),
                 Buffer::Reset => (), // continue
@@ -144,12 +144,21 @@ impl<T: io::Read> Lexer<T> {
                     if self.buf[self.pos] == b'"' {
                         break
                     }
-                    result.push(try!(self.parse_escape()))
+                    // The ugly bit: parse_escape returns a char and we have
+                    // to encode it into utf8 to push into result. This is extra
+                    // work and relies on an unstable feature. It would've been
+                    // better for parse_escape to produce a unicode byte
+                    // sequence directly, but I don't want to encode into utf-8
+                    // manually (yet).
+                    let ch = try!(self.parse_escape());
+                    let mut bytebuf = [0u8; 4];
+                    let size = ch.encode_utf8(&mut bytebuf).unwrap();
+                    result.extend(&bytebuf[0..size]);
                 }
             }
         }
         self.pos += 1;
-        Ok(result)
+        Ok(try!(String::from_utf8(result)))
     }
 
     fn check_word(&mut self, expected: &[u8]) -> Result<()> {
