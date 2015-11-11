@@ -21,18 +21,6 @@ fn is_number(value: u8) -> bool {
     }
 }
 
-#[inline]
-fn hexdecode(s: &[u8]) -> Option<char> {
-    let mut value = 0;
-    for c in s.iter() {
-        match (*c as char).to_digit(16) {
-            None => return None,
-            Some(d) => value = value * 16 + d,
-        }
-    }
-    char::from_u32(value)
-}
-
 #[derive(Debug, PartialEq)]
 pub enum Lexeme {
     String(String),
@@ -83,41 +71,30 @@ impl<T: io::Read> Lexer<T> {
         }
     }
 
-    fn ensure_at_least(&mut self, min: usize) -> io::Result<Buffer> {
-        let remainder = self.len - self.pos;
-        if remainder >= min {
-            Ok(Buffer::Within)
-        } else {
-            for i in 0..remainder {
-                self.buf[i] = self.buf[self.pos + i]
+    fn hexdecode(&mut self) -> Result<char> {
+        let mut value = 0;
+        for _ in 0..4 {
+            if let Buffer::Empty = try!(self.ensure_buffer()) {
+                return Err(Error::Escape(vec![]))
             }
-            self.pos = 0;
-            self.f.read(&mut self.buf[remainder..]).and_then(|size| {
-                self.len = remainder + size;
-                Ok(if self.len >= min { Buffer::Reset } else { Buffer::Empty })
-            })
+            match (self.buf[self.pos] as char).to_digit(16) {
+                None => return Err(Error::Escape(vec![])),
+                Some(d) => value = value * 16 + d,
+            }
+            self.pos += 1;
         }
+        char::from_u32(value).map(Ok).unwrap_or(Err(Error::Escape(vec![])))
     }
 
     fn parse_escape(&mut self) -> Result<char> {
-        if let Buffer::Empty = try!(self.ensure_at_least(2)) {
-            return Err(Error::Escape(self.buf[self.pos..].to_vec()))
-        }
         self.pos += 1; // swallow \
+        if let Buffer::Empty = try!(self.ensure_buffer()) {
+            return Err(Error::Escape(self.buf[self.pos - 1..].to_vec()))
+        }
         let escape = self.buf[self.pos];
         self.pos += 1; // move past the escape symbol
         Ok(match escape {
-            b'u' => {
-                if let Buffer::Empty = try!(self.ensure_at_least(4)) {
-                    return Err(Error::Escape(self.buf[self.pos..].to_vec()))
-                }
-                let s = &self.buf[self.pos..self.pos + 4];
-                self.pos += 4;
-                match hexdecode(s) {
-                    None => return Err(Error::Escape(s.to_vec())),
-                    Some(ch) => ch,
-                }
-            }
+            b'u' => try!(self.hexdecode()),
             b'b' => '\x08',
             b'f' => '\x0c',
             b'n' => '\n',
