@@ -14,6 +14,7 @@ fn is_whitespace(value: u8) -> bool {
     }
 }
 
+#[inline(always)]
 fn is_number(value: u8) -> bool {
     match value {
         b'+' | b'-' | b'.' | b'0' ... b'9' | b'E' | b'e' => true,
@@ -43,6 +44,7 @@ enum Buffer {
 
 pub struct Lexer<T: io::Read> {
     buf: [u8; BUFSIZE],
+    tmp: Vec<u8>,
     len: usize,
     pos: usize,
     f: T,
@@ -53,6 +55,7 @@ impl<T: io::Read> Lexer<T> {
     pub fn new(f: T) -> Lexer<T> {
         Lexer {
             buf: [0; BUFSIZE],
+            tmp: Vec::with_capacity(BUFSIZE),
             len: 0,
             pos: 0,
             f: f,
@@ -152,20 +155,30 @@ impl<T: io::Read> Lexer<T> {
         Ok(())
     }
 
-    fn consume_number(&mut self) -> Result<Vec<u8>> {
-        let mut result = vec![];
+    fn consume_number(&mut self) -> Result<f64> {
+        let mut start;
+        self.tmp.truncate(0);
         loop {
-            let start = self.pos;
+            start = self.pos;
             while self.pos < self.len && is_number(self.buf[self.pos]) {
                 self.pos += 1;
             }
-            result.extend(self.buf[start..self.pos].iter().cloned());
+            if self.pos < self.len && self.tmp.is_empty() {
+                break;
+            }
+            self.tmp.extend(self.buf[start..self.pos].iter().cloned());
             match try!(self.ensure_buffer()) {
                 Buffer::Reset => (), // continue
                 _ => break,
             }
         }
-        Ok(result)
+        let buffer = if self.tmp.is_empty() {
+            &self.buf[start..self.pos]
+        } else {
+            &self.tmp[..]
+        };
+        let s = unsafe { str::from_utf8_unchecked(buffer) };
+        Ok(try!(s.parse().map_err(|_| Error::Unknown(buffer.to_owned()))))
     }
 
 }
@@ -196,9 +209,7 @@ impl<T: io::Read> Iterator for Lexer<T> {
                 Lexeme::Null
             }
             b'+' | b'-' | b'.' | b'0' ... b'9' => {
-                let buffer = itry!(self.consume_number());
-                let s = unsafe { str::from_utf8_unchecked(&buffer[..]) };
-                Lexeme::Number(itry!(s.parse().map_err(|_| Error::Unknown(buffer.clone()))))
+                Lexeme::Number(itry!(self.consume_number()))
             }
             byte => {
                 self.pos += 1;
