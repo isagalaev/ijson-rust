@@ -1,4 +1,4 @@
-use std::{io, str, char};
+use std::{io, char};
 
 use ::errors::{Error, Result};
 
@@ -10,14 +10,6 @@ const BUFSIZE: usize = 4 * 1024;
 fn is_whitespace(value: u8) -> bool {
     match value {
         9 | 10 | 13 | 32 => true,
-        _ => false,
-    }
-}
-
-#[inline(always)]
-fn is_number(value: u8) -> bool {
-    match value {
-        b'+' | b'-' | b'.' | b'0' ... b'9' | b'E' | b'e' => true,
         _ => false,
     }
 }
@@ -44,7 +36,6 @@ enum Buffer {
 
 pub struct Lexer<T: io::Read> {
     buf: [u8; BUFSIZE],
-    tmp: Vec<u8>,
     len: usize,
     pos: usize,
     f: T,
@@ -55,7 +46,6 @@ impl<T: io::Read> Lexer<T> {
     pub fn new(f: T) -> Lexer<T> {
         Lexer {
             buf: [0; BUFSIZE],
-            tmp: Vec::with_capacity(BUFSIZE),
             len: 0,
             pos: 0,
             f: f,
@@ -155,30 +145,60 @@ impl<T: io::Read> Lexer<T> {
         Ok(())
     }
 
-    fn consume_number(&mut self) -> Result<f64> {
-        let mut start;
-        self.tmp.truncate(0);
+    fn consume_sign(&mut self) -> bool {
+        match self.buf[self.pos] {
+            b'-' => { self.pos += 1; false }
+            b'+' => { self.pos += 1; true }
+            _ => true,
+        }
+    }
+
+    #[inline(always)]
+    fn consume_int(&mut self, acc: &mut i64) -> Result<(usize)> {
+        let mut count = 0;
         loop {
-            start = self.pos;
-            while self.pos < self.len && is_number(self.buf[self.pos]) {
-                self.pos += 1;
+            if let Buffer::Empty = try!(self.ensure_buffer()) {
+                break
             }
-            if self.pos < self.len && self.tmp.is_empty() {
-                break;
-            }
-            self.tmp.extend(self.buf[start..self.pos].iter().cloned());
-            match try!(self.ensure_buffer()) {
-                Buffer::Reset => (), // continue
+            match self.buf[self.pos] {
+                byte @ b'0'...b'9' => *acc = *acc * 10 + (byte - b'0') as i64,
                 _ => break,
             }
+            self.pos += 1;
+            count += 1;
         }
-        let buffer = if self.tmp.is_empty() {
-            &self.buf[start..self.pos]
+        Ok(count)
+    }
+
+    fn consume_number(&mut self) -> Result<f64> {
+        let sign = self.consume_sign();
+        let mut int = 0;
+        if try!(self.consume_int(&mut int)) == 0 && (self.pos >= self.len || self.buf[self.pos] != b'.') {
+            return Err(Error::Unknown(vec![]))
+        }
+        let mut pow = if self.pos < self.len && self.buf[self.pos] == b'.' {
+            self.pos += 1;
+            try!(self.consume_int(&mut int)) as i64
         } else {
-            &self.tmp[..]
+            0
         };
-        let s = unsafe { str::from_utf8_unchecked(buffer) };
-        Ok(try!(s.parse().map_err(|_| Error::Unknown(buffer.to_owned()))))
+        if self.pos < self.len && (self.buf[self.pos] == b'E' || self.buf[self.pos] == b'e') {
+            self.pos += 1;
+            let sign = self.consume_sign();
+            let mut offset = 0;
+            if try!(self.consume_int(&mut offset)) == 0 {
+                return Err(Error::Unknown(vec![]))
+            }
+            if !sign {
+                offset = -offset;
+            }
+            pow -= offset;
+        }
+        let mut result = int as f64 / (10.0f64).powi(pow as i32);
+        if !sign {
+            result = -result
+        }
+        Ok(result)
     }
 
 }
