@@ -178,7 +178,7 @@ impl<T: io::Read> Lexer<T> {
         }
         let mut pow = if self.pos < self.len && self.buf[self.pos] == b'.' {
             self.pos += 1;
-            try!(self.consume_int(&mut int)) as i64
+            -(try!(self.consume_int(&mut int)) as i64)
         } else {
             0
         };
@@ -192,9 +192,9 @@ impl<T: io::Read> Lexer<T> {
             if !sign {
                 offset = -offset;
             }
-            pow -= offset;
+            pow += offset;
         }
-        let mut result = int as f64 / (10.0f64).powi(pow as i32);
+        let mut result = int as f64 * (10.0f64).powi(pow as i32);
         if !sign {
             result = -result
         }
