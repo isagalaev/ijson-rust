@@ -193,11 +193,17 @@ impl<T: io::Read> Lexer<T> {
             }
             pow += offset;
         }
-        let mut result = int as f64 * (10.0f64).powi(pow as i32);
         if !sign {
-            result = -result
+            int = -int
         }
-        Ok(result)
+
+        Ok(if pow == 0 {
+            int as f64
+        } else  if pow < 0 {
+            int as f64 / (10.0f64).powi(-pow as i32)
+        } else {
+            int as f64 * (10.0f64).powi(pow as i32)
+        })
     }
 
 }
