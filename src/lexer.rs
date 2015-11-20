@@ -176,12 +176,11 @@ impl<T: io::Read> Lexer<T> {
         if try!(self.consume_int(&mut int)) == 0 && (self.pos >= self.len || self.buf[self.pos] != b'.') {
             return Err(Error::Unknown(vec![]))
         }
-        let mut pow = if self.pos < self.len && self.buf[self.pos] == b'.' {
+        let mut pow = 0;
+        if self.pos < self.len && self.buf[self.pos] == b'.' {
             self.pos += 1;
-            -(try!(self.consume_int(&mut int)) as i64)
-        } else {
-            0
-        };
+            pow -= try!(self.consume_int(&mut int)) as i64;
+        }
         if self.pos < self.len && (self.buf[self.pos] == b'E' || self.buf[self.pos] == b'e') {
             self.pos += 1;
             let sign = self.consume_sign();
