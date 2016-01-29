@@ -20,6 +20,7 @@ pub enum Event {
 }
 
 impl From<Lexeme> for Event {
+    #[inline]
     fn from(lexeme: Lexeme) -> Self {
         match lexeme {
             Lexeme::OBracket => Event::StartArray,
