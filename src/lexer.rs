@@ -1,4 +1,4 @@
-use std::{io, char};
+use std::{io, char, str};
 
 use ::errors::{Error, Result};
 
@@ -15,8 +15,8 @@ fn is_whitespace(value: u8) -> bool {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Lexeme {
-    String(String),
+pub enum Lexeme<'a> {
+    String(&'a str),
     Number(f64),
     Boolean(bool),
     Null,
@@ -36,6 +36,7 @@ enum Buffer {
 
 pub struct Lexer<T: io::Read> {
     buf: [u8; BUFSIZE],
+    tmp: Vec<u8>,
     len: usize,
     pos: usize,
     f: T,
@@ -46,6 +47,7 @@ impl<T: io::Read> Lexer<T> {
     pub fn new(f: T) -> Lexer<T> {
         Lexer {
             buf: [0; BUFSIZE],
+            tmp: vec![],
             len: 0,
             pos: 0,
             f: f,
@@ -98,15 +100,15 @@ impl<T: io::Read> Lexer<T> {
         })
     }
 
-    fn consume_string(&mut self) -> Result<String> {
-        let mut result = Vec::with_capacity(BUFSIZE);
+    fn consume_string<'a>(&'a mut self) -> Result<&'a str> {
+        self.tmp = Vec::with_capacity(BUFSIZE);
         self.pos += 1;
         loop {
             let start = self.pos;
             while self.pos < self.len && !(self.buf[self.pos] == b'"' || self.buf[self.pos] == b'\\') {
                 self.pos += 1;
             }
-            result.extend(&self.buf[start..self.pos]);
+            self.tmp.extend(&self.buf[start..self.pos]);
             match try!(self.ensure_buffer()) {
                 Buffer::Empty => return Err(Error::Unterminated),
                 Buffer::Reset => (), // continue
@@ -115,7 +117,7 @@ impl<T: io::Read> Lexer<T> {
                         break
                     }
                     // The ugly bit: parse_escape returns a char and we have
-                    // to encode it into utf8 to push into result. This is extra
+                    // to encode it into utf8 to push into self.tmp. This is extra
                     // work and relies on an unstable feature. It would've been
                     // better for parse_escape to produce a unicode byte
                     // sequence directly, but I don't want to encode into utf-8
@@ -123,12 +125,12 @@ impl<T: io::Read> Lexer<T> {
                     let ch = try!(self.parse_escape());
                     let mut bytebuf = [0u8; 4];
                     let size = ch.encode_utf8(&mut bytebuf).unwrap();
-                    result.extend(&bytebuf[0..size]);
+                    self.tmp.extend(&bytebuf[0..size]);
                 }
             }
         }
         self.pos += 1;
-        Ok(try!(String::from_utf8(result)))
+        Ok(try!(str::from_utf8(&self.tmp[..])))
     }
 
     fn check_word(&mut self, expected: &[u8]) -> Result<()> {
@@ -206,12 +208,7 @@ impl<T: io::Read> Lexer<T> {
         })
     }
 
-}
-
-impl<T: io::Read> Iterator for Lexer<T> {
-    type Item = Result<Lexeme>;
-
-    fn next(&mut self) -> Option<Self::Item> {
+    pub fn next<'a>(&'a mut self) -> Option<Result<Lexeme<'a>>> {
         while match itry!(self.ensure_buffer()) {
             Buffer::Empty => return None,
             _ => is_whitespace(self.buf[self.pos]),
@@ -249,5 +246,27 @@ impl<T: io::Read> Iterator for Lexer<T> {
                 }
             }
         }))
+    }
+
+    #[inline]
+    fn next_byte(&mut self, b: u8) -> Result<bool> {
+        while match try!(self.ensure_buffer()) {
+            Buffer::Empty => false,
+            _ => is_whitespace(self.buf[self.pos]),
+        } {
+            self.pos += 1;
+        }
+        Ok(match try!(self.ensure_buffer()) {
+            Buffer::Empty => false,
+            _ => self.buf[self.pos] == b,
+        })
+    }
+
+    pub fn cbrace_next(&mut self) -> Result<bool> {
+        self.next_byte(b'}')
+    }
+
+    pub fn cbracket_next(&mut self) -> Result<bool> {
+        self.next_byte(b']')
     }
 }

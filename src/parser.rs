@@ -1,17 +1,16 @@
 use std::io::Read;
-use std::iter::Peekable;
 
 use ::lexer::{Lexer, Lexeme};
-use ::errors::{Error, Result, ResultIterator};
+use ::errors::{Error, Result};
 
 
 #[derive(Debug)]
 #[derive(PartialEq)]
-pub enum Event {
+pub enum Event<'a> {
     Null,
     Boolean(bool),
-    String(String),
-    Key(String),
+    String(&'a str),
+    Key(&'a str),
     Number(f64),
     StartArray,
     EndArray,
@@ -19,9 +18,9 @@ pub enum Event {
     EndMap,
 }
 
-impl From<Lexeme> for Event {
+impl<'a> From<Lexeme<'a>> for Event<'a> {
     #[inline]
-    fn from(lexeme: Lexeme) -> Self {
+    fn from(lexeme: Lexeme<'a>) -> Self {
         match lexeme {
             Lexeme::OBracket => Event::StartArray,
             Lexeme::OBrace => Event::StartMap,
@@ -45,52 +44,56 @@ enum State {
     Comma,
 }
 
+#[derive(PartialEq)]
+enum Container {
+    Object,
+    Array,
+}
+
 pub struct Parser<T: Read> {
-    lexer: Peekable<Lexer<T>>,
-    stack: Vec<Lexeme>,
+    lexer: Lexer<T>,
+    stack: Vec<Container>,
     state: State,
+}
+
+
+macro_rules! consume_lexeme {
+    ($parser: expr) => {
+        itry!($parser.lexer.next().unwrap_or(Err(Error::MoreLexemes)))
+    }
 }
 
 impl<T: Read> Parser<T> {
 
-    pub fn new(f: T) -> ResultIterator<Parser<T>> {
-        ResultIterator::new(Parser {
-            lexer: Lexer::new(f).peekable(),
+    pub fn new(f: T) -> Parser<T> {
+        Parser {
+            lexer: Lexer::new(f),
             stack: vec![],
             state: State::Event(false),
-        })
+        }
     }
 
-    fn consume_lexeme(&mut self) -> Result<Lexeme> {
-        self.lexer.next().unwrap_or(Err(Error::MoreLexemes))
-    }
-
-}
-
-impl<T: Read> Iterator for Parser<T> {
-    type Item = Result<Event>;
-
-    fn next(&mut self) -> Option<Self::Item> {
+    pub fn next<'a>(&'a mut self) -> Option<Result<Event<'a>>> {
         loop {
             match self.state {
                 State::Closed => {
-                    return match self.lexer.peek() {
-                        Some(&Err(Error::IO(..))) | None => None,
+                    return match self.lexer.next() {
+                        Some(Err(Error::IO(..))) | None => None,
                         Some(..) => Some(Err(Error::AdditionalData)),
                     }
                 }
                 State::Event(can_close) => {
-                    let lexeme = itry!(self.consume_lexeme());
+                    let lexeme = consume_lexeme!(self);
 
                     match &lexeme {
-                        &Lexeme::CBracket | &Lexeme::CBrace if !can_close => return Some(Err(Error::Unexpected(lexeme))),
-                        &Lexeme::OBracket => self.stack.push(Lexeme::OBracket),
-                        &Lexeme::OBrace => self.stack.push(Lexeme::OBrace),
+                        &Lexeme::CBracket | &Lexeme::CBrace if !can_close => return Some(Err(Error::Unexpected)),
+                        &Lexeme::OBracket => self.stack.push(Container::Array),
+                        &Lexeme::OBrace => self.stack.push(Container::Object),
                         &Lexeme::CBracket | &Lexeme::CBrace => {
-                            let expected = if Lexeme::CBracket == lexeme { Lexeme::OBracket } else { Lexeme::OBrace };
+                            let expected = if Lexeme::CBracket == lexeme { Container::Array } else { Container::Object };
                             match self.stack.pop() {
                                 Some(ref value) if *value == expected => (),
-                                _ => return Some(Err(Error::Unmatched(lexeme))),
+                                _ => return Some(Err(Error::Unmatched)),
                             }
                         }
                         _ => ()
@@ -109,44 +112,41 @@ impl<T: Read> Iterator for Parser<T> {
                     return Some(Ok(Event::from(lexeme)))
                 }
                 State::Key(can_close) => {
-                    if let Some(&Ok(Lexeme::CBrace)) = self.lexer.peek() {
+                    if itry!(self.lexer.cbrace_next()) {
                         if !can_close {
-                            return Some(Err(Error::Unexpected(Lexeme::CBrace)))
+                            return Some(Err(Error::Unexpected))
                         }
                         self.state = State::Event(true);
                         continue;
                     }
-                    return Some(match itry!(self.consume_lexeme()) {
+                    return Some(match consume_lexeme!(self) {
                         Lexeme::String(s) => {
                             self.state = State::Colon;
                             Ok(Event::Key(s))
                         }
-                        lexeme => Err(Error::Unexpected(lexeme))
+                        _ => Err(Error::Unexpected)
                     })
                 }
                 State::Colon => {
-                    match itry!(self.consume_lexeme()) {
+                    match consume_lexeme!(self) {
                         Lexeme::Colon => self.state = State::Event(false),
-                        lexeme => return Some(Err(Error::Unexpected(lexeme))),
+                        _ => return Some(Err(Error::Unexpected)),
                     }
                 }
                 State::Comma => {
-                    match self.lexer.peek() {
-                        Some(&Ok(Lexeme::CBrace)) | Some(&Ok(Lexeme::CBracket)) => {
-                            self.state = State::Event(true);
-                            continue
-                        }
-                        _ => (),
+                    if itry!(self.lexer.cbracket_next()) || itry!(self.lexer.cbrace_next()) {
+                        self.state = State::Event(true);
+                        continue;
                     }
-                    match itry!(self.consume_lexeme()) {
+                    match consume_lexeme!(self) {
                         Lexeme::Comma => {
-                            self.state = if self.stack[self.stack.len() - 1] == Lexeme::OBracket {
+                            self.state = if *self.stack.last().unwrap() == Container::Array {
                                 State::Event(false)
                             } else {
                                 State::Key(false)
                             }
                         },
-                        lexeme => return Some(Err(Error::Unexpected(lexeme))),
+                        _ => return Some(Err(Error::Unexpected)),
                     }
                 }
             }
