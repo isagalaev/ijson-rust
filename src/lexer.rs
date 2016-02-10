@@ -47,7 +47,7 @@ impl<T: io::Read> Lexer<T> {
     pub fn new(f: T) -> Lexer<T> {
         Lexer {
             buf: [0; BUFSIZE],
-            tmp: vec![],
+            tmp: Vec::with_capacity(BUFSIZE),
             len: 0,
             pos: 0,
             f: f,
@@ -101,21 +101,25 @@ impl<T: io::Read> Lexer<T> {
     }
 
     fn consume_string<'a>(&'a mut self) -> Result<&'a str> {
-        self.tmp = Vec::with_capacity(BUFSIZE);
+        let mut in_tmp = false;
+        let mut start;
         self.pos += 1;
         loop {
-            let start = self.pos;
+            start = self.pos;
             while self.pos < self.len && !(self.buf[self.pos] == b'"' || self.buf[self.pos] == b'\\') {
                 self.pos += 1;
             }
-            self.tmp.extend(&self.buf[start..self.pos]);
+            if self.pos >= self.len || self.buf[self.pos] == b'\\' {
+                if !in_tmp {
+                    unsafe { self.tmp.set_len(0); }
+                    in_tmp = true;
+                }
+                self.tmp.extend_from_slice(&self.buf[start..self.pos]);
+            }
             match try!(self.ensure_buffer()) {
                 Buffer::Empty => return Err(Error::Unterminated),
-                Buffer::Reset => (), // continue
-                Buffer::Within => {  // " or \
-                    if self.buf[self.pos] == b'"' {
-                        break
-                    }
+                Buffer::Within if self.buf[self.pos] == b'"' => break,
+                Buffer::Within => { // b'\'
                     // The ugly bit: parse_escape returns a char and we have
                     // to encode it into utf8 to push into self.tmp. This is extra
                     // work and relies on an unstable feature. It would've been
@@ -125,12 +129,14 @@ impl<T: io::Read> Lexer<T> {
                     let ch = try!(self.parse_escape());
                     let mut bytebuf = [0u8; 4];
                     let size = ch.encode_utf8(&mut bytebuf).unwrap();
-                    self.tmp.extend(&bytebuf[0..size]);
+                    self.tmp.extend_from_slice(&bytebuf[0..size]);
                 }
+                _ => (),
             }
         }
+        let result = if in_tmp { &self.tmp[..] } else { &self.buf[start..self.pos] };
         self.pos += 1;
-        Ok(try!(str::from_utf8(&self.tmp[..])))
+        Ok(try!(str::from_utf8(result)))
     }
 
     fn check_word(&mut self, expected: &[u8]) -> Result<()> {
