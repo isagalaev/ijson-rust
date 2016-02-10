@@ -259,7 +259,7 @@ impl<T: io::Read> Lexer<T> {
         }))
     }
 
-    #[inline]
+    #[inline(always)]
     fn next_byte(&mut self, b: u8) -> Result<bool> {
         while match try!(self.ensure_buffer()) {
             Buffer::Empty => false,
@@ -273,10 +273,12 @@ impl<T: io::Read> Lexer<T> {
         })
     }
 
+    #[inline(always)]
     pub fn cbrace_next(&mut self) -> Result<bool> {
         self.next_byte(b'}')
     }
 
+    #[inline(always)]
     pub fn cbracket_next(&mut self) -> Result<bool> {
         self.next_byte(b']')
     }
