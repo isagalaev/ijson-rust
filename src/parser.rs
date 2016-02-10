@@ -56,10 +56,10 @@ pub struct Parser<T: Read> {
     state: State,
 }
 
-
-macro_rules! consume_lexeme {
-    ($parser: expr) => {
-        itry!($parser.lexer.next().unwrap_or(Err(Error::MoreLexemes)))
+impl<T: Read> Lexer<T> {
+    #[inline]
+    pub fn consume(&mut self) -> Result<Lexeme> {
+        self.next().unwrap_or(Err(Error::MoreLexemes))
     }
 }
 
@@ -83,7 +83,7 @@ impl<T: Read> Parser<T> {
                     }
                 }
                 State::Event(can_close) => {
-                    let lexeme = consume_lexeme!(self);
+                    let lexeme = itry!(self.lexer.consume());
 
                     match &lexeme {
                         &Lexeme::CBracket | &Lexeme::CBrace if !can_close => return Some(Err(Error::Unexpected)),
@@ -119,7 +119,7 @@ impl<T: Read> Parser<T> {
                         self.state = State::Event(true);
                         continue;
                     }
-                    return Some(match consume_lexeme!(self) {
+                    return Some(match itry!(self.lexer.consume()) {
                         Lexeme::String(s) => {
                             self.state = State::Colon;
                             Ok(Event::Key(s))
@@ -128,7 +128,7 @@ impl<T: Read> Parser<T> {
                     })
                 }
                 State::Colon => {
-                    match consume_lexeme!(self) {
+                    match itry!(self.lexer.consume()) {
                         Lexeme::Colon => self.state = State::Event(false),
                         _ => return Some(Err(Error::Unexpected)),
                     }
@@ -138,7 +138,7 @@ impl<T: Read> Parser<T> {
                         self.state = State::Event(true);
                         continue;
                     }
-                    match consume_lexeme!(self) {
+                    match itry!(self.lexer.consume()) {
                         Lexeme::Comma => {
                             self.state = if *self.stack.last().unwrap() == Container::Array {
                                 State::Event(false)
