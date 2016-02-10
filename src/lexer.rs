@@ -134,7 +134,12 @@ impl<T: io::Read> Lexer<T> {
                 _ => (),
             }
         }
-        let result = if in_tmp { &self.tmp[..] } else { &self.buf[start..self.pos] };
+        let result = if in_tmp {
+            self.tmp.extend_from_slice(&self.buf[start..self.pos]);
+            &self.tmp[..]
+        } else {
+            &self.buf[start..self.pos]
+        };
         self.pos += 1;
         Ok(try!(str::from_utf8(result)))
     }
