@@ -127,9 +127,7 @@ impl<T: io::Read> Lexer<T> {
                     // sequence directly, but I don't want to encode into utf-8
                     // manually (yet).
                     let ch = try!(self.parse_escape());
-                    let mut bytebuf = [0u8; 4];
-                    let size = ch.encode_utf8(&mut bytebuf).unwrap();
-                    self.tmp.extend_from_slice(&bytebuf[0..size]);
+                    self.tmp.extend(ch.encode_utf8());
                 }
                 _ => (),
             }
