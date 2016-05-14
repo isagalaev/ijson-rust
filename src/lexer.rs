@@ -256,28 +256,4 @@ impl<T: io::Read> Lexer<T> {
             }
         }))
     }
-
-    #[inline(always)]
-    fn next_byte(&mut self, b: u8) -> Result<bool> {
-        while match try!(self.ensure_buffer()) {
-            Buffer::Empty => false,
-            _ => is_whitespace(self.buf[self.pos]),
-        } {
-            self.pos += 1;
-        }
-        Ok(match try!(self.ensure_buffer()) {
-            Buffer::Empty => false,
-            _ => self.buf[self.pos] == b,
-        })
-    }
-
-    #[inline(always)]
-    pub fn cbrace_next(&mut self) -> Result<bool> {
-        self.next_byte(b'}')
-    }
-
-    #[inline(always)]
-    pub fn cbracket_next(&mut self) -> Result<bool> {
-        self.next_byte(b']')
-    }
 }

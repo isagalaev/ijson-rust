@@ -38,8 +38,9 @@ impl<'a> From<Lexeme<'a>> for Event<'a> {
 #[derive(Debug)]
 enum State {
     Closed,
-    Event(bool),
-    Key(bool),
+    Value,
+    ArrayOpen,
+    ObjectOpen,
     Colon,
     Comma,
 }
@@ -50,10 +51,70 @@ enum Container {
     Array,
 }
 
+struct ParserState {
+    state: State,
+    stack: Vec<Container>,
+}
+
+impl ParserState {
+
+    #[inline(always)]
+    fn process_value<'a>(&mut self, lexeme: Lexeme<'a>) -> Result<Event<'a>> {
+        match lexeme {
+            Lexeme::OBracket => self.stack.push(Container::Array),
+            Lexeme::OBrace => self.stack.push(Container::Object),
+            _ => (),
+        };
+
+        self.state = if self.stack.is_empty() {
+            State::Closed
+        } else if lexeme == Lexeme::OBracket {
+            State::ArrayOpen
+        } else if lexeme == Lexeme::OBrace {
+            State::ObjectOpen
+        } else {
+            State::Comma
+        };
+
+        Ok(Event::from(lexeme))
+    }
+
+    #[inline(always)]
+    fn process_closing<'a>(&mut self, lexeme: Lexeme<'a>) -> Result<Event<'a>> {
+        let result = match lexeme {
+            Lexeme::CBracket | Lexeme::CBrace => {
+                let expected = if lexeme == Lexeme::CBracket { Container::Array } else { Container::Object };
+                match self.stack.pop() {
+                    Some(ref value) if *value == expected => Ok(Event::from(lexeme)),
+                    _ => Err(Error::Unmatched),
+                }
+            }
+            _ => unreachable!(),
+        };
+
+        self.state = if self.stack.is_empty() {
+            State::Closed
+        } else {
+            State::Comma
+        };
+
+        result
+    }
+
+    #[inline(always)]
+    fn process_key<'a>(&mut self, lexeme: Lexeme<'a>) -> Result<Event<'a>> {
+        self.state = State::Colon;
+        match lexeme {
+            Lexeme::String(s) => Ok(Event::Key(s)),
+            _ => unreachable!(),
+        }
+    }
+
+}
+
 pub struct Parser<T: Read> {
     lexer: Lexer<T>,
-    stack: Vec<Container>,
-    state: State,
+    state: ParserState,
 }
 
 impl<T: Read> Lexer<T> {
@@ -68,88 +129,69 @@ impl<T: Read> Parser<T> {
     pub fn new(f: T) -> Parser<T> {
         Parser {
             lexer: Lexer::new(f),
-            stack: vec![],
-            state: State::Event(false),
+            state: ParserState {
+                stack: vec![],
+                state: State::Value,
+            },
         }
     }
 
     pub fn next<'a>(&'a mut self) -> Option<Result<Event<'a>>> {
-        loop {
-            match self.state {
-                State::Closed => {
-                    return match self.lexer.next() {
-                        Some(Err(Error::IO(..))) | None => None,
-                        Some(..) => Some(Err(Error::AdditionalData)),
-                    }
+        let event = match self.state.state {
+            State::Closed => {
+                match self.lexer.next() {
+                    Some(Err(Error::IO(..))) | None => return None,
+                    Some(..) => Err(Error::AdditionalData),
                 }
-                State::Event(can_close) => {
-                    let lexeme = itry!(self.lexer.consume());
-
-                    match &lexeme {
-                        &Lexeme::CBracket | &Lexeme::CBrace if !can_close => return Some(Err(Error::Unexpected)),
-                        &Lexeme::OBracket => self.stack.push(Container::Array),
-                        &Lexeme::OBrace => self.stack.push(Container::Object),
-                        &Lexeme::CBracket | &Lexeme::CBrace => {
-                            let expected = if Lexeme::CBracket == lexeme { Container::Array } else { Container::Object };
-                            match self.stack.pop() {
-                                Some(ref value) if *value == expected => (),
-                                _ => return Some(Err(Error::Unmatched)),
-                            }
-                        }
-                        _ => ()
-                    };
-
-                    self.state = if self.stack.is_empty() {
-                        State::Closed
-                    } else if lexeme == Lexeme::OBracket {
-                        State::Event(true)
-                    } else if lexeme == Lexeme::OBrace {
-                        State::Key(true)
-                    } else {
-                        State::Comma
-                    };
-
-                    return Some(Ok(Event::from(lexeme)))
+            }
+            State::Value => {
+                let lexeme = itry!(self.lexer.consume());
+                match lexeme {
+                    Lexeme::Comma | Lexeme::Colon | Lexeme::CBrace | Lexeme::CBracket => Err(Error::Unexpected),
+                    _ => self.state.process_value(lexeme),
                 }
-                State::Key(can_close) => {
-                    if itry!(self.lexer.cbrace_next()) {
-                        if !can_close {
-                            return Some(Err(Error::Unexpected))
-                        }
-                        self.state = State::Event(true);
-                        continue;
-                    }
-                    return Some(match itry!(self.lexer.consume()) {
-                        Lexeme::String(s) => {
-                            self.state = State::Colon;
-                            Ok(Event::Key(s))
-                        }
-                        _ => Err(Error::Unexpected)
-                    })
+            }
+            State::ArrayOpen => {
+                let lexeme = itry!(self.lexer.consume());
+                match lexeme {
+                    Lexeme::Comma | Lexeme::Colon | Lexeme::CBrace => Err(Error::Unexpected),
+                    Lexeme::CBracket => self.state.process_closing(lexeme),
+                    _ => self.state.process_value(lexeme),
                 }
-                State::Colon => {
-                    match itry!(self.lexer.consume()) {
-                        Lexeme::Colon => self.state = State::Event(false),
-                        _ => return Some(Err(Error::Unexpected)),
-                    }
+            }
+            State::ObjectOpen => {
+                let lexeme = itry!(self.lexer.consume());
+                match lexeme {
+                    Lexeme::CBrace => self.state.process_closing(lexeme),
+                    Lexeme::String(_) => self.state.process_key(lexeme),
+                    _ => Err(Error::Unexpected)
                 }
-                State::Comma => {
-                    if itry!(self.lexer.cbracket_next()) || itry!(self.lexer.cbrace_next()) {
-                        self.state = State::Event(true);
-                        continue;
+            }
+            State::Colon => {
+                match itry!(self.lexer.consume()) {
+                    Lexeme::Colon => {
+                        let lexeme = itry!(self.lexer.consume());
+                        self.state.process_value(lexeme)
                     }
-                    match itry!(self.lexer.consume()) {
-                        Lexeme::Comma => {
-                            self.state = if *self.stack.last().unwrap() == Container::Array {
-                                State::Event(false)
-                            } else {
-                                State::Key(false)
-                            }
-                        },
-                        _ => return Some(Err(Error::Unexpected)),
+                    _ => Err(Error::Unexpected),
+                }
+            }
+            State::Comma => {
+                let lexeme = match itry!(self.lexer.consume()) {
+                    Lexeme::Comma => itry!(self.lexer.consume()),
+                    Lexeme::CBracket => Lexeme::CBracket,
+                    Lexeme::CBrace => Lexeme::CBrace,
+                    _ => return Some(Err(Error::Unexpected)),
+                };
+                match lexeme {
+                    Lexeme::CBracket | Lexeme::CBrace => self.state.process_closing(lexeme),
+                    _ => match *self.state.stack.last().unwrap() {
+                        Container::Array => self.state.process_value(lexeme),
+                        Container::Object => self.state.process_key(lexeme),
                     }
                 }
             }
-        }
+        };
+        Some(event)
     }
 }
