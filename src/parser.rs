@@ -18,23 +18,6 @@ pub enum Event<'a> {
     EndMap,
 }
 
-impl<'a> From<Lexeme<'a>> for Event<'a> {
-    #[inline]
-    fn from(lexeme: Lexeme<'a>) -> Self {
-        match lexeme {
-            Lexeme::OBracket => Event::StartArray,
-            Lexeme::OBrace => Event::StartMap,
-            Lexeme::CBracket => Event::EndArray,
-            Lexeme::CBrace => Event::EndMap,
-            Lexeme::String(s) => Event::String(s),
-            Lexeme::Number(n) => Event::Number(n),
-            Lexeme::Null => Event::Null,
-            Lexeme::Boolean(b) => Event::Boolean(b),
-            Lexeme::Comma | Lexeme::Colon => unreachable!(),
-        }
-    }
-}
-
 #[derive(Debug)]
 enum State {
     Closed,
@@ -60,10 +43,19 @@ impl ParserState {
 
     #[inline(always)]
     fn process_value<'a>(&mut self, lexeme: Lexeme<'a>) -> Result<Event<'a>> {
-        match lexeme {
-            Lexeme::OBracket => self.stack.push(Container::Array),
-            Lexeme::OBrace => self.stack.push(Container::Object),
+        match &lexeme {
+            &Lexeme::OBracket => self.stack.push(Container::Array),
+            &Lexeme::OBrace => self.stack.push(Container::Object),
             _ => (),
+        };
+        let result = match lexeme {
+            Lexeme::OBracket => Event::StartArray,
+            Lexeme::OBrace => Event::StartMap,
+            Lexeme::String(s) => Event::String(s),
+            Lexeme::Number(n) => Event::Number(n),
+            Lexeme::Null => Event::Null,
+            Lexeme::Boolean(b) => Event::Boolean(b),
+            _ => unreachable!(),
         };
 
         self.state = if self.stack.is_empty() {
@@ -76,7 +68,7 @@ impl ParserState {
             State::Comma
         };
 
-        Ok(Event::from(lexeme))
+        Ok(result)
     }
 
     #[inline(always)]
