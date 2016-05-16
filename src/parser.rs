@@ -94,7 +94,7 @@ impl ParserState {
         self.state = State::Colon;
         match lexeme {
             Lexeme::String(s) => Ok(Event::Key(s)),
-            _ => unreachable!(),
+            _ => Err(Error::Unexpected),
         }
     }
 
