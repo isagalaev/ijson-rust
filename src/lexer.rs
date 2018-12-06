@@ -103,6 +103,7 @@ impl<T: io::Read> Lexer<T> {
     fn consume_string<'a>(&'a mut self) -> Result<&'a str> {
         let mut in_tmp = false;
         let mut start;
+        let mut encode_buffer = [0; 5];
         self.pos += 1;
         loop {
             start = self.pos;
@@ -127,7 +128,8 @@ impl<T: io::Read> Lexer<T> {
                     // sequence directly, but I don't want to encode into utf-8
                     // manually (yet).
                     let ch = try!(self.parse_escape());
-                    self.tmp.extend(ch.encode_utf8());
+                    let count = ch.encode_utf8(&mut encode_buffer).len();
+                    self.tmp.extend(&encode_buffer[..count]);
                 }
                 _ => (),
             }
