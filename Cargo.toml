@@ -3,6 +3,7 @@
 name = "ijson"
 version = "0.0.1"
 authors = ["Ivan Sagalaev <maniac@softwaremaniacs.org>"]
+edition = "2018"
 
 [dependencies]
 rustc-serialize = "*"

@@ -1,7 +1,7 @@
 use std::io::Read;
 
-use ::lexer::{Lexer, Lexeme};
-use ::errors::{Error, Result};
+use crate::lexer::{Lexer, Lexeme};
+use crate::errors::{Error, Result};
 
 
 #[derive(Debug)]

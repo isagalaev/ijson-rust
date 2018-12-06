@@ -1,6 +1,6 @@
 use std::{io, char, str};
 
-use ::errors::{Error, Result};
+use crate::errors::{Error, Result};
 
 
 const BUFSIZE: usize = 4 * 1024;
@@ -69,7 +69,7 @@ impl<T: io::Read> Lexer<T> {
     fn hexdecode(&mut self) -> Result<char> {
         let mut value = 0;
         for _ in 0..4 {
-            if let Buffer::Empty = try!(self.ensure_buffer()) {
+            if let Buffer::Empty = self.ensure_buffer()? {
                 return Err(Error::Escape(vec![]))
             }
             match (self.buf[self.pos] as char).to_digit(16) {
@@ -83,13 +83,13 @@ impl<T: io::Read> Lexer<T> {
 
     fn parse_escape(&mut self) -> Result<char> {
         self.pos += 1; // swallow \
-        if let Buffer::Empty = try!(self.ensure_buffer()) {
+        if let Buffer::Empty = self.ensure_buffer()? {
             return Err(Error::Escape(self.buf[self.pos - 1..].to_vec()))
         }
         let escape = self.buf[self.pos];
         self.pos += 1; // move past the escape symbol
         Ok(match escape {
-            b'u' => try!(self.hexdecode()),
+            b'u' => self.hexdecode()?,
             b'b' => '\x08',
             b'f' => '\x0c',
             b'n' => '\n',
@@ -117,7 +117,7 @@ impl<T: io::Read> Lexer<T> {
                 }
                 self.tmp.extend_from_slice(&self.buf[start..self.pos]);
             }
-            match try!(self.ensure_buffer()) {
+            match self.ensure_buffer()? {
                 Buffer::Empty => return Err(Error::Unterminated),
                 Buffer::Within if self.buf[self.pos] == b'"' => break,
                 Buffer::Within => { // b'\'
@@ -127,7 +127,7 @@ impl<T: io::Read> Lexer<T> {
                     // better for parse_escape to produce a unicode byte
                     // sequence directly, but I don't want to encode into utf-8
                     // manually (yet).
-                    let ch = try!(self.parse_escape());
+                    let ch = self.parse_escape()?;
                     let count = ch.encode_utf8(&mut encode_buffer).len();
                     self.tmp.extend(&encode_buffer[..count]);
                 }
@@ -141,13 +141,13 @@ impl<T: io::Read> Lexer<T> {
             &self.buf[start..self.pos]
         };
         self.pos += 1;
-        Ok(try!(str::from_utf8(result)))
+        Ok(str::from_utf8(result)?)
     }
 
     fn check_word(&mut self, expected: &[u8]) -> Result<()> {
         let mut iter = expected.iter();
         while let Some(byte) = iter.next() {
-            if let Buffer::Empty = try!(self.ensure_buffer()) {
+            if let Buffer::Empty = self.ensure_buffer()? {
                 return Err(Error::Unknown(b"".to_vec()))
             }
             if self.buf[self.pos] != *byte {
@@ -170,7 +170,7 @@ impl<T: io::Read> Lexer<T> {
     fn consume_int(&mut self, acc: &mut i64) -> Result<(usize)> {
         let mut count = 0;
         loop {
-            if let Buffer::Empty = try!(self.ensure_buffer()) {
+            if let Buffer::Empty = self.ensure_buffer()? {
                 break
             }
             match self.buf[self.pos] {
@@ -186,19 +186,19 @@ impl<T: io::Read> Lexer<T> {
     fn consume_number(&mut self) -> Result<f64> {
         let sign = self.consume_sign();
         let mut int = 0;
-        if try!(self.consume_int(&mut int)) == 0 && (self.pos >= self.len || self.buf[self.pos] != b'.') {
+        if self.consume_int(&mut int)? == 0 && (self.pos >= self.len || self.buf[self.pos] != b'.') {
             return Err(Error::Unknown(vec![]))
         }
         let mut pow = 0;
         if self.pos < self.len && self.buf[self.pos] == b'.' {
             self.pos += 1;
-            pow -= try!(self.consume_int(&mut int)) as i64;
+            pow -= self.consume_int(&mut int)? as i64;
         }
         if self.pos < self.len && (self.buf[self.pos] == b'E' || self.buf[self.pos] == b'e') {
             self.pos += 1;
             let sign = self.consume_sign();
             let mut offset = 0;
-            if try!(self.consume_int(&mut offset)) == 0 {
+            if self.consume_int(&mut offset)? == 0 {
                 return Err(Error::Unknown(vec![]))
             }
             if !sign {
